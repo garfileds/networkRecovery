@@ -3,3 +3,4 @@ cache/*
 log/*
 report
 report/*
+adoug/__pycache__/

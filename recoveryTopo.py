@@ -50,6 +50,17 @@ def replaceMissHop(hopVector):
             hopVector[i] = hop_average_raw[i]
     return hopVector
 
+
+def extractPath(path, leafnodes, measurenodes):
+    extract_path = {}
+    for leaf in leafnodes:
+        if leaf not in extract_path:
+            extract_path[leaf] = {}
+        for measure in measurenodes:
+            extract_path[leaf][measure] = path[leaf][measure]
+    return extract_path
+
+
 now = datetime.datetime.now()
 timeStyle = now.strftime("%Y-%m-%d %H:%M:%S")
 logger.info('****%s: drawTopo program start****\n' % (timeStyle))
@@ -64,8 +75,8 @@ for level in nodeLevel:
     logger.info('****Miss percent is: %s\n****' % (str(MissPercent)))
 
     NUM_LeaNode = nodeLevel[level]['numOfLeafnode']
-    # NUM_MeasureNode = nodeLevel[level]['numOfMeasurenode']
-    NUM_MeasureNode = 13
+    NUM_MeasureNode = nodeLevel[level]['numOfMeasurenode']
+    # NUM_MeasureNode = 13
     Epsilon = nodeLevel['param']['Epsilon']
 
     levelConfig = config.config()[level]
@@ -92,7 +103,7 @@ for level in nodeLevel:
         leafNodes = leaf[:NUM_LeaNode]
         measureNodes = leaf[NUM_LeaNode:NUM_LeaNode+NUM_MeasureNode]
     else:
-        leafNodes = config.config()[level]['leafnodes']
+        leafNodes = config.config()[level]['leafnodes'][:NUM_LeaNode]
         measureNodes = config.config()[level]['measurenodes'][:NUM_MeasureNode]
     logger.info('leafNodes:\n' + str(leafNodes))
     logger.info('measureNodes:\n' + str(measureNodes))
@@ -105,6 +116,22 @@ for level in nodeLevel:
     else:
         with open(nodeLevel[level]['path'], 'r') as f:
             path = json.load(f)
+
+    if level == '2K_1000':
+        path = extractPath(path, leafNodes, measureNodes)
+        with open(nodeLevel[level]['path_extract'], 'w') as f:
+            json.dump(path, f)
+    else:
+        with open(nodeLevel[level]['path_extract'], 'r') as f:
+            path = json.load(f)
+
+    if level == '2K_1000':
+        path_extract = {}
+        for leaf in leafNodes:
+            if leaf not in path_extract:
+                path_extract[leaf] = {}
+            for measure in measureNodes:
+                path_extract[leaf][measure] = nx.shortest_path(G, source=leaf, target=measure)
 
     # caculate sharedPath between nodes
     if level == '':
