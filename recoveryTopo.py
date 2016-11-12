@@ -1,6 +1,9 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
+import matplotlib as mpl
+mpl.use('Agg')
+
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
@@ -22,7 +25,7 @@ import adoug.predict as predict
 import adoug.network_generator as ng
 
 nodeLevel = config.configNodeLevel()
-MissPercent = 0.5
+MissPercent = 0.9
 
 # logging.basicConfig(level=logging.WARNING and logging.INFO,
 #                 format='%(message)s',
@@ -49,17 +52,6 @@ def replaceMissHop(hopVector):
         if hopVector[i] == 10000:
             hopVector[i] = hop_average_raw[i]
     return hopVector
-
-
-def extractPath(path, leafnodes, measurenodes):
-    extract_path = {}
-    for leaf in leafnodes:
-        if leaf not in extract_path:
-            extract_path[leaf] = {}
-        for measure in measurenodes:
-            extract_path[leaf][measure] = path[leaf][measure]
-    return extract_path
-
 
 now = datetime.datetime.now()
 timeStyle = now.strftime("%Y-%m-%d %H:%M:%S")
@@ -107,24 +99,16 @@ for level in nodeLevel:
         measureNodes = config.config()[level]['measurenodes'][:NUM_MeasureNode]
     logger.info('leafNodes:\n' + str(leafNodes))
     logger.info('measureNodes:\n' + str(measureNodes))
+    print('1:nodes add\n')
 
     # shortest distance as hop between nodes
-    if level == '':
-        path = nx.all_pairs_shortest_path(G)
-        with open(nodeLevel[level]['path'], 'w') as f:
-            json.dump(path, f)
-    else:
-        with open(nodeLevel[level]['path'], 'r') as f:
-            path = json.load(f)
-
-    if level == '2K_1000':
-        path = extractPath(path, leafNodes, measureNodes)
-        with open(nodeLevel[level]['path_extract'], 'w') as f:
-            json.dump(path, f)
-    else:
-        with open(nodeLevel[level]['path_extract'], 'r') as f:
-            path = json.load(f)
-
+    # if level == '':
+    #    path = nx.all_pairs_shortest_path(G)
+        # with open(nodeLevel[level]['path'], 'w') as f:
+        #    json.dump(path, f)
+    # else:
+    #    with open(nodeLevel[level]['path_extract'], 'r') as f:
+    #        path = json.load(f)
     if level == '2K_1000':
         path_extract = {}
         for leaf in leafNodes:
@@ -132,15 +116,18 @@ for level in nodeLevel:
                 path_extract[leaf] = {}
             for measure in measureNodes:
                 path_extract[leaf][measure] = nx.shortest_path(G, source=leaf, target=measure)
+    path = path_extract
+    print('2:path\n')
 
     # caculate sharedPath between nodes
-    if level == '':
+    if level == '2K_1000':
         sharedPath = fsp.byNode(path, leafNodes, measureNodes)
-        with open(nodeLevel[level]['sharedPath'], 'w') as f:
-            json.dump(sharedPath, f)
+        # with open(nodeLevel[level]['sharedPath'], 'w') as f:
+        #    json.dump(sharedPath, f)
     else:
         with open(nodeLevel[level]['sharedPath'], 'r') as f:
             sharedPath = json.load(f)
+    print('3:sharedPath\n')
 
     if level == '2K_1000':
         hopSet = {}
@@ -194,6 +181,7 @@ for level in nodeLevel:
         hop_average_mean = levelConfig['hop_average_mean']
         hoplist_raw = levelConfig['hoplist_raw']
         hoplist_contrast_mean = levelConfig['hoplist_contrast_mean']
+    print('4:param\n')
 
     # Gaussian mixture model(GMM) for clutering leaf nodes
     n_components_gmm = nodeLevel[level]['n_components']
@@ -223,6 +211,7 @@ for level in nodeLevel:
     else:
         predictResultList = levelConfig['predict_result']
         hoplist_gmm = levelConfig['hoplist_gmm']
+    print('5:predictResult\n')
 
     # shared path estimation
 
@@ -235,7 +224,10 @@ for level in nodeLevel:
     else:
         with open(nodeLevel[level]['likehood'], 'r') as f:
             likehood = json.load(f)
+    print('6:likehood\n')
     alphaMap = predict.getAlpha(likehood['map_measure'], sharedPath, path, measureNodes)
+    print('7:alphaMap\n')
+
 
     # estimation with predict using gmm-data: get alpha
     if level == '2K_1000':
@@ -248,11 +240,14 @@ for level in nodeLevel:
             shared_path_predict = json.load(f)
             estimation_predict = shared_path_predict['RMSE']
     logger.info('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), str(MissPercent)))
+    print('8:shared_path_predict\n')
     print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), str(MissPercent)))
 
-    # network_gmm, label_ip = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leafNodes[:100], measureNodes[:1])
-    # node_color = ['green' for i in range(5)] + ['red' for i in range(len(network_gmm.nodes()) - 5)]
-    # nx.draw(network_gmm, node_size=30, node_color=node_color, labels=label_ip)
+    network_gmm, label_ip = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leafNodes, measureNodes[:1])
+    print('edges numbers: %s\n' % (len(network_gmm.edges())))
+    node_color = ['green' for i in range(5)] + ['red' for i in range(len(network_gmm.nodes()) - 5)]
+    nx.draw(network_gmm, node_size=30, node_color=node_color, labels=label_ip)
     #
-    # plt.axis('off')
-    # plt.show()
+    plt.axis('off')
+    plt.savefig("topo.png", format="PNG")
+    plt.show()
