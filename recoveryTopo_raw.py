@@ -1,4 +1,4 @@
-#! /usr/bin/python
+# /usr/bin/python
 # -*- coding: utf-8 -*-
 
 import networkx as nx
@@ -6,34 +6,26 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn import mixture
 import math
+import re
 import copy
-import logging
-import logging.handlers as logHandler
-import datetime
 import json
 import random
+import datetime
+import logging
+import logging.handlers as logHandler
 
+import adoug.network_generator as ng
+import adoug.config_raw as config_raw
 import adoug.mapColor as mc
 import adoug.config as config
 import adoug.findSharedPath as fsp
 import adoug.estimation as estimation
 import adoug.clustering as clu
 import adoug.predict as predict
-import adoug.network_generator as ng
-
-nodeLevel = config.configNodeLevel()
-MissPercent = 0.3
-
-# logging.basicConfig(level=logging.WARNING and logging.INFO,
-#                 format='%(message)s',
-#                 datefmt='%a, %d %b %Y %H:%M:%S',
-#                 filename='./log/info3.log',
-#                 filemode='a')
-# logHandler.RotatingFileHandler('./log/info3.log', 'a', 1024 * 1024 * 20, 510)
 
 LOG_FILE = './log/info_raw.log'
 
-handler = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1024*1024*20, backupCount=510)
+handler = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1024*1024, backupCount=1000)
 fmt = '%(message)s'
 
 formatter = logging.Formatter(fmt)
@@ -44,239 +36,313 @@ logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
 
+def find_measure_nodes(num, data):
+    data_sort = sorted(data, reverse=True)
+    measure_nodes = []
+
+    for item in data_sort:
+        for index in range(100):
+            if item == data[index]:
+                measure_nodes.append(index)
+
+    logger.info("appear_count_sort_real is: \n%s\n" % (str(measure_nodes)))
+    return measure_nodes[:num]
+
+
+def which_net_type(ip):
+    net_type = ''
+    match = re.match(r'(\d+)\.(\d+)\.(\d+)\.(\d+)', ip)
+    first, sencond, third, fourth = match.group(1, 2, 3, 4)
+    if first == '10' or first == '172' and int(sencond) >= 16 and int(sencond) <= 31 or first == '192' and sencond == '168':
+        net_type = 'intranet'
+    elif int(first) <= 127:
+        net_type = 'A'
+    elif int(first) >= 128 and int(first) <= 191:
+        net_type = 'B'
+    elif int(first) >= 192 and int(first) <= 223:
+        net_type = 'C'
+    elif int(first) >= 224 and int(first) <= 239:
+        net_type = 'D'
+    elif int(first) >= 240 and int(first) <= 255:
+        net_type = 'E'
+
+    return net_type
+
+
 def replaceMissHop(hopVector):
     for i in range(len(hopVector)):
         if hopVector[i] == 10000:
             hopVector[i] = hop_average_raw[i]
     return hopVector
 
+
 now = datetime.datetime.now()
 timeStyle = now.strftime("%Y-%m-%d %H:%M:%S")
-logger.info('****%s: drawTopo program start****\n' % (timeStyle))
+logger.info('****%s: network_raw.py start****\n' % (timeStyle))
 
-for level in nodeLevel:
-    if level != '2K_1000':
-        continue
+config_raw = config_raw.config_raw()
+nodelist_ip = list(config_raw['node_serial_map'].keys())
+nodelist = list(config_raw['node_serial_map'].values())
+node_serial_map = config_raw['node_serial_map']
+hop_dict = config_raw['hopDict']
+appear_count = config_raw['appearCount']
+appear_countlist = config_raw['appearCountList']
 
-    now = datetime.datetime.now()
-    timeStyle = now.strftime("%Y-%m-%d %H:%M:%S")
-    logger.info('****%s, %s: start****\n' % (timeStyle, level))
-    logger.info('****Miss percent is: %s\n****' % (str(MissPercent)))
+node_serial_map_reverse = {}
+for (ip, number) in node_serial_map.items():
+    node_serial_map_reverse[number] = ip
 
-    NUM_LeaNode = nodeLevel[level]['numOfLeafnode']
-    NUM_MeasureNode = nodeLevel[level]['numOfMeasurenode']
-    # NUM_MeasureNode = 13
-    Epsilon = nodeLevel['param']['Epsilon']
+# appear_count_sort = sorted(appear_countlist, reverse=True)
+# logger.info('appear_count_sort is: \n%s\n' % str(appear_count_sort))
 
-    levelConfig = config.config()[level]
+measure_nodes = config_raw['appearCountSortReal'][:8]
 
-    f = open(nodeLevel[level]['file'], 'r')
-    G = nx.Graph()
-    for linefile in f:
-        list = linefile.split(' ')
-        x = list[0]
-        list[1] = list[1].replace('\n', '')
-        y = list[1]
-        G.add_edge(x, y)
+# 假设相关变量
+leaf_nodes = copy.deepcopy(nodelist)
+for item in measure_nodes:
+    leaf_nodes.remove(item)
 
-    # select leaf nodes & 8measurement nodes
-    nodes = G.nodes()
-    degree = G.degree()
+hoplist = [[0 for i in range(len(measure_nodes))] for j in range(len(leaf_nodes))]
+path = {}
+for j in range(len(measure_nodes)):
+    dest = measure_nodes[j]
+    for i in range(len(leaf_nodes)):
+        source = leaf_nodes[i]
+        hop = 0
+        if dest in hop_dict and source in hop_dict[dest]:
+            hop = hop_dict[dest][source]
+        elif source in hop_dict and dest in hop_dict[source]:
+            hop = hop_dict[source][dest]
+        elif hop == 0:
+            hop = random.randint(1, 88)
+        else:
+            hop = random.randint(1, 88)
 
-    leaf = []
-    for node in degree.keys():
-        if degree[node] == 1:
-            leaf.append(node)
-    print('nodes of real graph has: %s\n' % (len(leaf)))
-    print('edges of real graph has: %s\n' % (len(G.edges())))
-    nx.draw(G, node_size=30)
-    plt.axis('off')
-    plt.show()
-    plt.cla()
-    logger.info('nodes of real graph has: %s\n' % (len(leaf)))
-    logger.info('edges of real graph has: %s\n' % (len(G.edges())))
+        hoplist[i][j] = hop
 
-    if level == '':
-        leafNodes = leaf[0:-NUM_MeasureNode]
-        measureNodes = leaf[-NUM_MeasureNode:len(leaf)]
+        if source not in path:
+            path[source] = {}
+            path[source][dest] = {}
+        elif dest not in path[source]:
+            path[source][dest] = {}
+        path[source][dest] = hop
+print('1: complete measure_nodes, leaf_nodes, path, hoplist\n')
+
+shared_path = {}
+for i in range(len(leaf_nodes) - 1):
+    source = leaf_nodes[i]
+    for j in range(i + 1, len(leaf_nodes)):
+        dest = leaf_nodes[j]
+        for k in range(len(measure_nodes)):
+            measure = measure_nodes[k]
+            alpha = random.random()
+
+            if source not in shared_path:
+                shared_path[source] = {}
+                shared_path[source][dest] = {}
+            elif dest not in shared_path[source]:
+                shared_path[source][dest] = {}
+
+            shared_path[source][dest][measure] = int(alpha * min(hoplist[i][k], hoplist[j][k]))
+
+print('2: complete shared_path\n')
+
+# 节点标签和对应的颜色，画图所需
+label = {}
+label_reverse = {}
+colordict = {
+    'intranet': 'red',
+    'A': 'blue',
+    'B': 'yellow',
+    'C': 'white',
+    'D': 'c',
+    'E': 'green'
+}
+
+network_raw, label_ip = ng.NetworkGenerator().generate(shared_path, hoplist, leaf_nodes, measure_nodes[:1])
+print('nodes of real graph has: %s\n' % (len(network_raw.nodes())))
+print('edges of real graph has: %s\n' % (len(network_raw.edges())))
+
+logger.info('nodes of real graph has: %s\n' % (len(network_raw.nodes())))
+logger.info('edges of real graph has: %s\n' % (len(network_raw.edges())))
+
+nodelist_known = list(label_ip.keys())
+nodelist_all = network_raw.nodes()
+
+colormap_known = [[193, 44, 161, 1]]
+colormap_all = [[193, 44, 161, 1]]
+
+for node in nodelist_known:
+    ip_type = which_net_type(node_serial_map_reverse[label_ip[node]])
+    colormap_known.append(colordict[ip_type])
+
+for node in nodelist_all:
+    if node not in label_ip:
+        colormap_all.append('m')
     else:
-        leafNodes = config.config()[level]['leafnodes'][:NUM_LeaNode]
-        measureNodes = config.config()[level]['measurenodes'][:NUM_MeasureNode]
-    logger.info('leafNodes:\n' + str(leafNodes))
-    logger.info('measureNodes:\n' + str(measureNodes))
-    print('1:nodes add\n')
+        ip_type = which_net_type(node_serial_map_reverse[label_ip[node]])
+        colormap_all.append(colordict[ip_type])
 
-    # shortest distance as hop between nodes
-    # if level == '2K_1000':
-    #     path = nx.all_pairs_shortest_path(G)
-        # with open(nodeLevel[level]['path'], 'w') as f:
-        #    json.dump(path, f)
-    # else:
-    #     with open(nodeLevel[level]['path_extract'], 'r') as f:
-    #         path = json.load(f)
-    if level == '2K_1000':
-        path_extract = {}
-        for leaf in leafNodes:
-            if leaf not in path_extract:
-                path_extract[leaf] = {}
-            for measure in measureNodes:
-                path_extract[leaf][measure] = nx.shortest_path(G, source=leaf, target=measure)
-    path = path_extract
-    print('2:path\n')
+print('3: complete network_raw, colormap_known, colormap_all\n')
 
-    # caculate sharedPath between nodes
-    if level == '2K_1000':
-        sharedPath = fsp.byNode(path, leafNodes, measureNodes)
-        # with open(nodeLevel[level]['sharedPath'], 'w') as f:
-        #     json.dump(sharedPath, f)
-    else:
-        with open(nodeLevel[level]['sharedPath'], 'r') as f:
-            sharedPath = json.load(f)
-    print('3:sharedPath\n')
+# nx.draw(network_raw, nodelist=nodelist_known, node_size=30, node_color=colormap_known, labels=label_ip, font_size=10)
+# plt.axis('off')
+# plt.show()
+# plt.cla()
 
-    if level == '2K_1000':
-        hopSet = {}
-        hopList = []
-        hopCountSum = [0 for i in range(NUM_MeasureNode)]
+# nx.draw(network_raw, nodelist=nodelist_all, node_size=30, node_color=colormap_all, labels=label_ip, font_size=10)
+# plt.axis('off')
+# plt.show()
+# plt.cla()
 
-        for leafNode in leafNodes:
-            hopSet[leafNode] = []
-            for i in range(NUM_MeasureNode):
-                hopSet[leafNode].append(len(path[leafNode][measureNodes[i]]) - 1)
-                hopCountSum[i] += len(path[leafNode][measureNodes[i]]) - 1
-            hopList.append(hopSet[leafNode])
+# 保存图文件
+# pos = nx.spring_layout(network_raw)
+# nx.set_node_attributes(network_raw, 'pos', pos)
+# nx.write_gpickle(network_raw, "./topo/network_raw.gpickle")
+# print('4: save ./topo/network_raw.gpickle')
+# nx.draw(network_raw, nodelist=nodelist_know, edgelist=[], node_color=colormap_known, labels=label)
+# nx.draw(network_raw, nodelist=nodelist_all, node_size=30, node_color=colormap_all, labels=label, font_size=10)
 
-        # random select hop missed
-        hoplist_raw = copy.deepcopy(hopList)
-        miss_index_hop = []
-        for j in range(NUM_MeasureNode):
-            randomMiss = random.sample(range(len(hopList)), int(NUM_LeaNode * MissPercent))
-            for i in randomMiss:
-                hopCountSum[j] = hopCountSum[j] - hopList[i][j]
-                hoplist_raw[i][j] = 10000
-                miss_index_hop.append([i, j])
-        logger.info('random incomplete hopList is:\n %s\n' % str(hoplist_raw))
-        logger.info('random select missed hop is:\n%s\n' % (str(miss_index_hop)))
 
-        # caculate hopCountAverage without miss hop
-        hop_average_raw = [0 for i in range(NUM_MeasureNode)]
-        for i in range(len(hop_average_raw)):
-            hop_average_raw[i] = int(round(hopCountSum[i] / (NUM_LeaNode - NUM_LeaNode * MissPercent)))
-        logger.info('hopCountAverage without miss hop is: ' + str(hop_average_raw))
+# 配置
+nodeLevel = config.configNodeLevel()
+MissPercent = 0.3
+Epsilon = 1
 
-        # replace miss hop with average of other hops
-        tempMap = map(replaceMissHop, hoplist_raw)
-        hoplist_mean = [el for el in tempMap]
-        logger.info('hopList recovering by mean is:\n%s\n' % str(hoplist_mean))
+NUM_LeaNode = 500
+NUM_MeasureNode = 8
+n_components_gmm = 8
+# 配置 end
 
-        # caculate hopCountAverage after replacing miss hop
-        hop_average_mean = copy.deepcopy(hop_average_raw)
-        for i in range(len(hopCountSum)):
-            hop_average_mean[i] = int(round((hopCountSum[i] + (NUM_LeaNode * MissPercent) * hop_average_raw[i]) / NUM_LeaNode))
-        logger.info('hopAverage after replacing miss hop is: ' + str(hop_average_mean))
+leafNodes = leaf_nodes[:NUM_LeaNode]
+measureNodes = measure_nodes[:NUM_MeasureNode]
 
-        # hop-count contrast
-        hoplist_contrast_mean = copy.deepcopy(hoplist_raw)
+logger.info('leafNodes:\n' + str(leafNodes))
+logger.info('measureNodes:\n' + str(measureNodes))
+print('1:nodes add\n')
 
-        for i in range(len(hoplist_raw)):
-            for j in range(NUM_MeasureNode):
-                hoplist_contrast_mean[i][j] = round(math.fabs(hoplist_mean[i][j] - hop_average_mean[j]))
-        logger.info('hoplist_contrast_mean is:\n%s\n' % str(hoplist_contrast_mean))
-    else:
-        hop_average_mean = levelConfig['hop_average_mean']
-        hoplist_raw = levelConfig['hoplist_raw']
-        hoplist_contrast_mean = levelConfig['hoplist_contrast_mean']
-    print('4:param\n')
+sharedPath = shared_path
+hopSet = {}
+hopList = []
+hopCountSum = [0 for i in range(NUM_MeasureNode)]
 
-    # Gaussian mixture model(GMM) for clutering leaf nodes
-    n_components_gmm = nodeLevel[level]['n_components']
-    if level == '2K_1000':
-        train_data = np.array(hoplist_contrast_mean)
-        dpgmm = mixture.GaussianMixture(n_components_gmm,
-                                                covariance_type='full').fit(train_data, miss_index_hop=miss_index_hop, hoplist_contrast_mean=hoplist_contrast_mean)
-        logger.info('hoplist_contrast_mean after gmm.fit is:\n%s\n' % str(hoplist_contrast_mean))
+for leafNode in leafNodes:
+    hopSet[leafNode] = []
+    for i in range(NUM_MeasureNode):
+        hopSet[leafNode].append(path[leafNode][measureNodes[i]] - 1)
+        hopCountSum[i] += path[leafNode][measureNodes[i]] - 1
+    # hopList.append(hopSet[leafNode])
 
-        means = dpgmm.means_
-        logger.info('dpgmm\'s means is: %s\n' % (means))
-        print('dpgmm\'s means is: %s\n' % (means))
+hopList = hoplist[:len(hoplist)]
 
-        # predict label
-        predictResult = dpgmm.predict(train_data)
-        predictResultList = predictResult.tolist()
-        logger.info('result of predicting leafnode: \n' + str(predictResultList))
+# random select hop missed
+hoplist_raw = copy.deepcopy(hopList)
+miss_index_hop = []
+for j in range(NUM_MeasureNode):
+    randomMiss = random.sample(range(len(hopList)), int(NUM_LeaNode * MissPercent))
+    for i in randomMiss:
+        hopCountSum[j] = hopCountSum[j] - hopList[i][j]
+        hoplist_raw[i][j] = 10000
+        miss_index_hop.append([i, j])
+logger.info('random incomplete hopList is:\n %s\n' % str(hoplist_raw))
+logger.info('random select missed hop is:\n%s\n' % (str(miss_index_hop)))
 
-        # replacing miss hop with gmm.mean_
-        hoplist_gmm = copy.deepcopy(hoplist_raw)
+# caculate hopCountAverage without miss hop
+hop_average_raw = [0 for i in range(NUM_MeasureNode)]
+for i in range(len(hop_average_raw)):
+    hop_average_raw[i] = int(round(hopCountSum[i] / (NUM_LeaNode - NUM_LeaNode * MissPercent)))
+logger.info('hopCountAverage without miss hop is: ' + str(hop_average_raw))
 
-        for i in range(NUM_LeaNode):
-            for j in range(NUM_MeasureNode):
-                if hoplist_raw[i][j] == 10000:
-                    hoplist_gmm[i][j] = round(hop_average_mean[j] + means[predictResultList[i]][j])
-        logger.info('hopList recovering by gmm is:\n%s\n' % (str(hoplist_gmm)))
-    else:
-        predictResultList = levelConfig['predict_result']
-        hoplist_gmm = levelConfig['hoplist_gmm']
-    print('5:predictResult\n')
+# replace miss hop with average of other hops
+tempMap = map(replaceMissHop, hoplist_raw)
+hoplist_mean = [el for el in tempMap]
+logger.info('hopList recovering by mean is:\n%s\n' % str(hoplist_mean))
 
-    # shared path estimation
+# caculate hopCountAverage after replacing miss hop
+hop_average_mean = copy.deepcopy(hop_average_raw)
+for i in range(len(hopCountSum)):
+    hop_average_mean[i] = int(round((hopCountSum[i] + (NUM_LeaNode * MissPercent) * hop_average_raw[i]) / NUM_LeaNode))
+logger.info('hopAverage after replacing miss hop is: ' + str(hop_average_mean))
 
-    # estimation with predict using gmm-data: get alpha
-    # hoplist_gmm = hoplist_mean
-    if level == '2K_1000':
-        likehood = predict.caculateLikehoodMap(hoplist_gmm, leafNodes, measureNodes, Epsilon)
-        # with open(nodeLevel[level]['likehood'], 'w') as f:
-        #     json.dump(likehood, f)
-    else:
-        with open(nodeLevel[level]['likehood'], 'r') as f:
-            likehood = json.load(f)
-    print('6:likehood\n')
-    alphaMap = predict.getAlpha(likehood['map_measure'], sharedPath, path, measureNodes)
-    print('7:alphaMap\n')
+# hop-count contrast
+hoplist_contrast_mean = copy.deepcopy(hoplist_raw)
 
-    # estimation with predict using gmm-data: get alpha
-    if level == '2K_1000':
-        estimation_predict, estimation_predict_percent, shared_path_predict = estimation.estimateByPredict(leafNodes, measureNodes[:1], likehood['map'], alphaMap, path, sharedPath)
-        shared_path_predict['RMSE'] = estimation_predict
-        # with open(nodeLevel[level]['shared_path_predict'], 'w') as f:
-        #     json.dump(shared_path_predict, f)
-    else:
-        with open(nodeLevel[level]['shared_path_predict'], 'r') as f:
-            shared_path_predict = json.load(f)
-            estimation_predict = shared_path_predict['RMSE']
-    logger.info('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
-    logger.info('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict_percent), '1'))
-    print('8:shared_path_predict\n')
-    print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
-    print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict_percent), '1'))
+for i in range(len(hoplist_raw)):
+    for j in range(NUM_MeasureNode):
+        hoplist_contrast_mean[i][j] = round(math.fabs(hoplist_mean[i][j] - hop_average_mean[j]))
+logger.info('hoplist_contrast_mean is:\n%s\n' % str(hoplist_contrast_mean))
+print('4:param\n')
 
-    network_gmm, label_ip = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leafNodes, measureNodes[:1])
+train_data = np.array(hoplist_contrast_mean)
+dpgmm = mixture.GaussianMixture(n_components_gmm,
+                                        covariance_type='full').fit(train_data, miss_index_hop=miss_index_hop, hoplist_contrast_mean=hoplist_contrast_mean)
+logger.info('hoplist_contrast_mean after gmm.fit is:\n%s\n' % str(hoplist_contrast_mean))
 
-    # 度分布
-    degree_gmm = nx.degree_histogram(network_gmm)
-    x = []
-    for i in range(len(degree_gmm)):
-        for j in range(degree_gmm[i]):
-            x.append(i)
-    # the histogram of the data
-    n, bins, patches = plt.hist(x, 5, normed=1, facecolor='green', alpha=0.5)
-    plt.show()
-    plt.cla()
+means = dpgmm.means_
+logger.info('dpgmm\'s means is: %s\n' % (means))
+print('dpgmm\'s means is: %s\n' % (means))
 
-    # 图的直径
-    diameter_gmm = nx.diameter(network_gmm)
-    print('diameter_gmm is: %s\n' % (str(diameter_gmm)))
-    logger.info('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+# predict label
+predictResult = dpgmm.predict(train_data)
+predictResultList = predictResult.tolist()
+logger.info('result of predicting leafnode: \n' + str(predictResultList))
 
-    # 最大连通子图
-    ccs = [len(c) for c in sorted(nx.connected_components(network_gmm), key=len, reverse=True)]
-    print(ccs)
-    print('\n')
-    largest_cc = max(nx.connected_components(network_gmm), key=len)
+# replacing miss hop with gmm.mean_
+hoplist_gmm = copy.deepcopy(hoplist_raw)
 
-    node_color = ['green'] + ['red' for i in range(len(network_gmm.nodes()) - 1)]
-    for index in largest_cc:
-        node_color[int(index)] = 'c'
-    nx.draw(network_gmm, node_size=30, node_color=node_color, labels=label_ip)
+for i in range(NUM_LeaNode):
+    for j in range(NUM_MeasureNode):
+        if hoplist_raw[i][j] == 10000:
+            hoplist_gmm[i][j] = round(hop_average_mean[j] + means[predictResultList[i]][j])
+logger.info('hopList recovering by gmm is:\n%s\n' % (str(hoplist_gmm)))
+print('5:predictResult\n')
 
-    plt.axis('off')
-    plt.show()
+# shared path estimation
+likehood = predict.caculateLikehoodMap(hoplist_gmm, leafNodes, measureNodes, Epsilon)
+print('6:likehood\n')
+alphaMap = predict.getAlpha(likehood['map_measure'], sharedPath, path, measureNodes)
+print('7:alphaMap\n')
+
+estimation_predict, estimation_predict_percent, shared_path_predict = estimation.estimateByPredict(leafNodes, measureNodes[:1], likehood['map'], alphaMap, path, sharedPath)
+shared_path_predict['RMSE'] = estimation_predict
+logger.info('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
+logger.info('estimation with approach of predict\'s result is(percent): %s when Epsilon is %s.' % (str(1 - estimation_predict_percent), '1'))
+print('8:shared_path_predict\n')
+# print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
+print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(1 - estimation_predict_percent), '1'))
+
+network_gmm, label_ip_gmm = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leafNodes, measureNodes[:1])
+# nx.draw(network_gmm, node_size=30, labels=label_ip_gmm, font_size=10)
+# plt.axis('off')
+# plt.show()
+# plt.cla()
+
+# 度分布
+# degree_gmm = nx.degree_histogram(network_gmm)
+# x = []
+# for i in range(len(degree_gmm)):
+#     for j in range(degree_gmm[i]):
+#         x.append(i)
+# the histogram of the data
+# n, bins, patches = plt.hist(x, 5, normed=1, facecolor='green', alpha=0.5)
+# plt.show()
+# plt.cla()
+
+# 图的直径
+diameter_gmm = nx.diameter(network_gmm)
+print('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+logger.info('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+
+# 最大连通子图
+# ccs = [len(c) for c in sorted(nx.connected_components(network_gmm), key=len, reverse=True)]
+# print(ccs)
+# print('\n')
+# largest_cc = max(nx.connected_components(network_gmm), key=len)
+
+# node_color = ['green'] + ['red' for i in range(len(network_gmm.nodes()) - 1)]
+# for index in largest_cc:
+#     node_color[int(index)] = 'c'
+# nx.draw(network_gmm, node_size=30, node_color=node_color, labels=label_ip)
+
+# plt.axis('off')
+# plt.show()
