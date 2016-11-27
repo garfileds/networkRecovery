@@ -31,7 +31,7 @@ MissPercent = 0.3
 #                 filemode='a')
 # logHandler.RotatingFileHandler('./log/info3.log', 'a', 1024 * 1024 * 20, 510)
 
-LOG_FILE = './log/info4.log'
+LOG_FILE = './log/info_raw.log'
 
 handler = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1024*1024*20, backupCount=510)
 fmt = '%(message)s'
