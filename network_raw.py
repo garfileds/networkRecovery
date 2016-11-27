@@ -3,9 +3,50 @@
 
 import networkx as nx
 import matplotlib.pyplot as plt
+import numpy as np
+from sklearn import mixture
+import math
 import re
+import copy
+import json
+import random
+import datetime
+import logging
+import logging.handlers as logHandler
 
 import adoug.network_generator as ng
+import adoug.config_raw as config_raw
+import adoug.mapColor as mc
+import adoug.config as config
+import adoug.findSharedPath as fsp
+import adoug.estimation as estimation
+import adoug.clustering as clu
+import adoug.predict as predict
+
+LOG_FILE = './log/info_raw.log'
+
+handler = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1024*1024, backupCount=1000)
+fmt = '%(message)s'
+
+formatter = logging.Formatter(fmt)
+handler.setFormatter(formatter)
+
+logger = logging.getLogger('info')
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+
+
+def find_measure_nodes(num, data):
+    data_sort = sorted(data, reverse=True)
+    measure_nodes = []
+
+    for item in data_sort:
+        for index in range(100):
+            if item == data[index]:
+                measure_nodes.append(index)
+
+    logger.info("appear_count_sort_real is: \n%s\n" % (str(measure_nodes)))
+    return measure_nodes[:num]
 
 
 def which_net_type(ip):
@@ -27,13 +68,86 @@ def which_net_type(ip):
 
     return net_type
 
-nodelist = ['107.243.49.243', '152.0.234.170', '10.31.35.139', '204.79.197.200', '216.58.213.74', '17.164.0.75', '80.252.86.189', '10.50.35.225', '161.30.191.226', '19.106.149.90', '161.30.191.228', '161.30.191.229', '214.159.95.209', '216.58.212.238', '193.252.234.246', '122.210.103.10', '193.220.194.171', '212.199.15.62', '125.78.253.227', '10.255.10.91', '10.255.8.233', '212.165.65.70', '124.126.250.73', '10.50.61.64', '212.165.98.130', '91.217.209.54', '175.131.10.118', '10.165.197.204', '80.101.11.152', '10.166.145.195', '71.6.146.185', '202.108.133.177', '66.246.168.24', '221.157.40.122', '66.246.168.26', '209.126.136.2', '10.31.32.174', '109.16.169.90', '194.9.12.108', '194.9.12.115', '10.28.6.69', '165.167.2.106', '10.255.126.24', '10.255.24.25', '37.0.61.106', '198.125.84.122', '17.236.155.246', '115.124.195.68', '17.167.194.149', '85.189.207.48', '10.255.34.33', '212.165.110.219', '172.109.29.164', '10.10.102.152', '95.6.13.209', '85.149.229.53', '172.20.20.34', '194.9.12.107', '104.69.244.31', '217.163.64.93', '194.9.12.100', '17.167.139.20', '118.127.18.240', '118.201.14.180', '173.252.88.104', '96.32.24.140', '10.31.34.243', '106.186.113.169', '194.9.12.25', '32.65.158.106', '182.18.65.18', '104.69.244.168', '141.212.122.84', '141.212.122.85', '17.178.104.39', '17.178.104.38', '173.252.88.66', '28.31.15.157', '17.252.44.30', '17.252.44.33', '98.3.133.57', '64.233.184.188', '253.14.237.152', '231.30.95.250', '199.24.194.247', '185.48.216.20', '202.106.0.20', '10.28.132.12', '191.89.224.126', '10.50.63.64', '211.35.229.226', '212.165.106.137', '46.140.120.190', '46.20.121.98', '17.167.192.128', '248.26.171.150', '104.255.70.247', '216.218.206.73', '245.55.62.154', '35.255.125.73', '93.184.221.200', '17.252.44.28', '17.252.44.25', '17.252.44.24', '43.24.139.49', '4.2.2.1', '22.67.41.95', '203.178.148.19', '123.132.254.201', '194.9.12.21', '194.9.12.20', '194.9.12.26', '212.165.65.67', '23.251.159.65', '17.167.192.152', '217.19.78.212', '217.19.78.211', '202.108.133.202', '0.98.61.108', '185.93.185.235', '17.167.135.60', '10.10.109.12', '181.120.217.42', '88.4.3.108', '17.46.5.203', '163.150.136.164', '2.138.180.252', '10.177.13.113', '10.177.13.112', '0.52.76.153', '30.131.53.211', '216.218.206.123', '50.22.225.82', '64.30.100.42', '210.77.0.201', '172.28.1.5', '172.28.1.4', '10.165.192.180', '217.163.64.104', '10.121.10.134', '32.6.143.124', '209.103.58.148', '10.255.7.42', '212.165.122.33', '197.75.5.243', '172.16.76.29', '17.178.104.16', '17.178.104.15', '17.178.104.14', '10.255.34.44']
-node_serial_map = {'107.243.49.243': 128, '152.0.234.170': 87, '10.31.35.139': 11, '204.79.197.200': 73, '216.58.213.74': 35, '17.164.0.75': 42, '80.252.86.189': 135, '10.50.35.225': 51, '161.30.191.226': 146, '19.106.149.90': 120, '161.30.191.228': 136, '161.30.191.229': 1, '214.159.95.209': 123, '216.58.212.238': 29, '193.252.234.246': 71, '122.210.103.10': 61, '193.220.194.171': 130, '212.199.15.62': 116, '125.78.253.227': 65, '10.255.10.91': 58, '10.255.8.233': 137, '212.165.65.70': 77, '124.126.250.73': 67, '10.50.61.64': 82, '212.165.98.130': 85, '91.217.209.54': 110, '175.131.10.118': 99, '10.165.197.204': 18, '80.101.11.152': 106, '10.166.145.195': 76, '71.6.146.185': 3, '202.108.133.177': 66, '66.246.168.24': 10, '221.157.40.122': 4, '66.246.168.26': 13, '209.126.136.2': 2, '10.31.32.174': 79, '109.16.169.90': 113, '194.9.12.108': 133, '194.9.12.115': 57, '10.28.6.69': 81, '165.167.2.106': 127, '10.255.126.24': 56, '10.255.24.25': 21, '37.0.61.106': 91, '198.125.84.122': 93, '17.236.155.246': 114, '115.124.195.68': 119, '17.167.194.149': 45, '85.189.207.48': 124, '10.255.34.33': 141, '212.165.110.219': 143, '172.109.29.164': 125, '10.10.102.152': 52, '95.6.13.209': 75, '85.149.229.53': 86, '172.20.20.34': 138, '194.9.12.107': 132, '104.69.244.31': 43, '217.163.64.93': 46, '194.9.12.100': 59, '17.167.139.20': 41, '118.127.18.240': 94, '118.201.14.180': 54, '173.252.88.104': 34, '96.32.24.140': 96, '10.31.34.243': 14, '106.186.113.169': 147, '194.9.12.25': 60, '32.65.158.106': 88, '182.18.65.18': 69, '104.69.244.168': 38, '141.212.122.84': 6, '141.212.122.85': 7, '17.178.104.39': 49, '17.178.104.38': 32, '173.252.88.66': 39, '28.31.15.157': 100, '17.252.44.30': 47, '17.252.44.33': 48, '98.3.133.57': 126, '64.233.184.188': 24, '253.14.237.152': 107, '231.30.95.250': 89, '199.24.194.247': 101, '185.48.216.20': 8, '202.106.0.20': 148, '10.28.132.12': 19, '191.89.224.126': 115, '10.50.63.64': 74, '211.35.229.226': 53, '212.165.106.137': 16, '46.140.120.190': 144, '46.20.121.98': 149, '17.167.192.128': 28, '248.26.171.150': 92, '104.255.70.247': 134, '216.218.206.73': 140, '245.55.62.154': 104, '35.255.125.73': 98, '93.184.221.200': 72, '17.252.44.28': 44, '17.252.44.25': 36, '17.252.44.24': 37, '43.24.139.49': 108, '4.2.2.1': 15, '22.67.41.95': 97, '203.178.148.19': 139, '123.132.254.201': 68, '194.9.12.21': 84, '194.9.12.20': 83, '194.9.12.26': 55, '212.165.65.67': 78, '23.251.159.65': 26, '17.167.192.152': 23, '217.19.78.212': 142, '217.19.78.211': 145, '202.108.133.202': 80, '0.98.61.108': 109, '185.93.185.235': 0, '17.167.135.60': 40, '10.10.109.12': 50, '181.120.217.42': 105, '88.4.3.108': 112, '17.46.5.203': 111, '163.150.136.164': 103, '2.138.180.252': 129, '10.177.13.113': 9, '10.177.13.112': 12, '0.52.76.153': 90, '30.131.53.211': 122, '216.218.206.123': 5, '50.22.225.82': 30, '64.30.100.42': 121, '210.77.0.201': 95, '172.28.1.5': 22, '172.28.1.4': 20, '10.165.192.180': 70, '217.163.64.104': 25, '10.121.10.134': 63, '32.6.143.124': 118, '209.103.58.148': 102, '10.255.7.42': 64, '212.165.122.33': 17, '197.75.5.243': 117, '172.16.76.29': 62, '17.178.104.16': 31, '17.178.104.15': 27, '17.178.104.14': 33, '10.255.34.44': 131}
-hopDict = {0: {1: 13}, 2: {66: 23}, 3: {1: 17}, 4: {136: 79}, 5: {1: 15}, 6: {1: 17}, 7: {1: 17}, 8: {9: 78}, 10: {11: 68}, 13: {79: 5}, 15: {16: 74}, 17: {85: 1}, 20: {131: 66}, 22: {131: 66}, 23: {21: 1}, 24: {21: 1}, 25: {21: 1}, 26: {21: 1}, 27: {21: 1}, 28: {21: 1}, 29: {21: 1}, 30: {21: 1}, 31: {21: 1}, 32: {21: 1}, 33: {21: 1}, 34: {21: 1}, 35: {21: 1}, 36: {21: 1}, 37: {21: 1}, 38: {21: 1}, 39: {21: 1}, 40: {21: 1}, 41: {21: 1}, 42: {21: 1}, 43: {21: 1}, 44: {21: 1}, 45: {21: 1}, 46: {21: 1}, 47: {21: 1}, 48: {21: 1}, 49: {21: 1}, 50: {74: 68}, 52: {74: 70}, 53: {54: 68}, 55: {56: 66}, 57: {137: 66}, 59: {141: 66}, 60: {131: 66}, 61: {62: 80}, 63: {131: 66}, 65: {66: 81}, 67: {66: 80}, 68: {66: 79}, 69: {66: 77}, 71: {130: 6}, 72: {51: 1}, 73: {51: 1}, 75: {76: 69}, 77: {76: 71}, 78: {76: 71}, 80: {81: 1}, 83: {56: 66}, 84: {56: 66}, 86: {87: 58}, 88: {89: 5}, 90: {91: 33}, 92: {93: 0}, 94: {95: 124}, 96: {97: 110}, 98: {99: 93}, 100: {101: 44}, 102: {103: 110}, 104: {105: 78}, 106: {107: 120}, 108: {109: 25}, 110: {111: 14}, 112: {113: 106}, 114: {115: 68}, 116: {117: 14}, 118: {119: 5}, 120: {121: 119}, 122: {123: 103}, 124: {125: 14}, 126: {127: 12}, 128: {129: 6}, 132: {131: 66}, 133: {131: 66}, 134: {135: 77}, 138: {135: 3}, 139: {146: 83}, 140: {136: 79}, 142: {143: 17}, 144: {143: 19}, 145: {143: 17}, 147: {1: 24}, 148: {66: 73}, 149: {85: 80}}
 
-network_raw = nx.Graph()
-network_generator = ng.NetworkGenerator()
+def replaceMissHop(hopVector):
+    for i in range(len(hopVector)):
+        if hopVector[i] == 10000:
+            hopVector[i] = hop_average_raw[i]
+    return hopVector
 
+
+now = datetime.datetime.now()
+timeStyle = now.strftime("%Y-%m-%d %H:%M:%S")
+logger.info('****%s: network_raw.py start****\n' % (timeStyle))
+
+config_raw = config_raw.config_raw()
+nodelist_ip = list(config_raw['node_serial_map'].keys())
+nodelist = list(config_raw['node_serial_map'].values())
+node_serial_map = config_raw['node_serial_map']
+hop_dict = config_raw['hopDict']
+appear_count = config_raw['appearCount']
+appear_countlist = config_raw['appearCountList']
+
+node_serial_map_reverse = {}
+for (ip, number) in node_serial_map.items():
+    node_serial_map_reverse[number] = ip
+
+# appear_count_sort = sorted(appear_countlist, reverse=True)
+# logger.info('appear_count_sort is: \n%s\n' % str(appear_count_sort))
+
+measure_nodes = config_raw['appearCountSortReal'][:8]
+
+# 假设相关变量
+leaf_nodes = copy.deepcopy(nodelist)
+for item in measure_nodes:
+    leaf_nodes.remove(item)
+
+hoplist = [[0 for i in range(len(measure_nodes))] for j in range(len(leaf_nodes))]
+path = {}
+for j in range(len(measure_nodes)):
+    dest = measure_nodes[j]
+    for i in range(len(leaf_nodes)):
+        source = leaf_nodes[i]
+        hop = 0
+        if dest in hop_dict and source in hop_dict[dest]:
+            hop = hop_dict[dest][source]
+        elif source in hop_dict and dest in hop_dict[source]:
+            hop = hop_dict[source][dest]
+        elif hop == 0:
+            hop = random.randint(1, 88)
+        else:
+            hop = random.randint(1, 88)
+
+        hoplist[i][j] = hop
+
+        if source not in path:
+            path[source] = {}
+            path[source][dest] = {}
+        elif dest not in path[source]:
+            path[source][dest] = {}
+        path[source][dest] = hop
+print('1: complete measure_nodes, leaf_nodes, path, hoplist\n')
+
+shared_path = {}
+for i in range(len(leaf_nodes) - 1):
+    source = leaf_nodes[i]
+    for j in range(i + 1, len(leaf_nodes)):
+        dest = leaf_nodes[j]
+        for k in range(len(measure_nodes)):
+            measure = measure_nodes[k]
+            alpha = random.random()
+
+            if source not in shared_path:
+                shared_path[source] = {}
+                shared_path[source][dest] = {}
+            elif dest not in shared_path[source]:
+                shared_path[source][dest] = {}
+
+            shared_path[source][dest][measure] = int(alpha * min(hoplist[i][k], hoplist[j][k]))
+
+print('2: complete shared_path\n')
+
+# 节点标签和对应的颜色，画图所需
 label = {}
 label_reverse = {}
 colordict = {
@@ -44,29 +158,191 @@ colordict = {
     'D': 'c',
     'E': 'green'
 }
-colormap_known = []
 
-for i in range(len(nodelist)):
-    network_raw.add_node(i)
-    label[i] = node_serial_map[nodelist[i]]
-    label_reverse[node_serial_map[nodelist[i]]] = i
+network_raw, label_ip = ng.NetworkGenerator().generate(shared_path, hoplist, leaf_nodes, measure_nodes[:1])
+print('nodes of real graph has: %s\n' % (len(network_raw.nodes())))
+print('edges of real graph has: %s\n' % (len(network_raw.edges())))
 
-    ip_type = which_net_type(nodelist[i])
+logger.info('nodes of real graph has: %s\n' % (len(network_raw.nodes())))
+logger.info('edges of real graph has: %s\n' % (len(network_raw.edges())))
+
+nodelist_known = list(label_ip.keys())
+nodelist_all = network_raw.nodes()
+
+colormap_known = [[193, 44, 161, 1]]
+colormap_all = [[193, 44, 161, 1]]
+
+for node in nodelist_known:
+    ip_type = which_net_type(node_serial_map_reverse[label_ip[node]])
     colormap_known.append(colordict[ip_type])
 
-network_generator.serial_number = len(nodelist)
+for node in nodelist_all:
+    if node not in label_ip:
+        colormap_all.append('m')
+    else:
+        ip_type = which_net_type(node_serial_map_reverse[label_ip[node]])
+        colormap_all.append(colordict[ip_type])
 
-for src in hopDict:
-    for dst in hopDict[src]:
-        hop = hopDict[src][dst]
-        edges, path = network_generator.generate_edges_by_path(label_reverse[src], label_reverse[dst], hop)
-        network_raw.add_edges_from(edges)
+print('3: complete network_raw, colormap_known, colormap_all\n')
 
-nodelist_know = range(len(nodelist))
-nodelist_all = network_raw.nodes()
-colormap_all = colormap_known + ['m' for i in range(len(nodelist_all) - len(nodelist_know))]
+# nx.draw(network_raw, nodelist=nodelist_known, node_size=30, node_color=colormap_known, labels=label_ip, font_size=10)
+# plt.axis('off')
+# plt.show()
+# plt.cla()
+
+# nx.draw(network_raw, nodelist=nodelist_all, node_size=30, node_color=colormap_all, labels=label_ip, font_size=10)
+# plt.axis('off')
+# plt.show()
+# plt.cla()
+
+# 保存图文件
+# pos = nx.spring_layout(network_raw)
+# nx.set_node_attributes(network_raw, 'pos', pos)
+# nx.write_gpickle(network_raw, "./topo/network_raw.gpickle")
+# print('4: save ./topo/network_raw.gpickle')
 # nx.draw(network_raw, nodelist=nodelist_know, edgelist=[], node_color=colormap_known, labels=label)
-nx.draw(network_raw, nodelist=nodelist_all, node_size=30, node_color=colormap_all, labels=label, font_size=10)
+# nx.draw(network_raw, nodelist=nodelist_all, node_size=30, node_color=colormap_all, labels=label, font_size=10)
 
-plt.axis('off')
-plt.show()
+
+# 配置
+nodeLevel = config.configNodeLevel()
+MissPercent = 0.3
+Epsilon = 1
+
+NUM_LeaNode = 500
+NUM_MeasureNode = 8
+n_components_gmm = 8
+# 配置 end
+
+leafNodes = leaf_nodes[:NUM_LeaNode]
+measureNodes = measure_nodes[:NUM_MeasureNode]
+
+logger.info('leafNodes:\n' + str(leafNodes))
+logger.info('measureNodes:\n' + str(measureNodes))
+print('1:nodes add\n')
+
+sharedPath = shared_path
+hopSet = {}
+hopList = []
+hopCountSum = [0 for i in range(NUM_MeasureNode)]
+
+for leafNode in leafNodes:
+    hopSet[leafNode] = []
+    for i in range(NUM_MeasureNode):
+        hopSet[leafNode].append(path[leafNode][measureNodes[i]] - 1)
+        hopCountSum[i] += path[leafNode][measureNodes[i]] - 1
+    # hopList.append(hopSet[leafNode])
+
+hopList = hoplist[:len(hoplist)]
+
+# random select hop missed
+hoplist_raw = copy.deepcopy(hopList)
+miss_index_hop = []
+for j in range(NUM_MeasureNode):
+    randomMiss = random.sample(range(len(hopList)), int(NUM_LeaNode * MissPercent))
+    for i in randomMiss:
+        hopCountSum[j] = hopCountSum[j] - hopList[i][j]
+        hoplist_raw[i][j] = 10000
+        miss_index_hop.append([i, j])
+logger.info('random incomplete hopList is:\n %s\n' % str(hoplist_raw))
+logger.info('random select missed hop is:\n%s\n' % (str(miss_index_hop)))
+
+# caculate hopCountAverage without miss hop
+hop_average_raw = [0 for i in range(NUM_MeasureNode)]
+for i in range(len(hop_average_raw)):
+    hop_average_raw[i] = int(round(hopCountSum[i] / (NUM_LeaNode - NUM_LeaNode * MissPercent)))
+logger.info('hopCountAverage without miss hop is: ' + str(hop_average_raw))
+
+# replace miss hop with average of other hops
+tempMap = map(replaceMissHop, hoplist_raw)
+hoplist_mean = [el for el in tempMap]
+logger.info('hopList recovering by mean is:\n%s\n' % str(hoplist_mean))
+
+# caculate hopCountAverage after replacing miss hop
+hop_average_mean = copy.deepcopy(hop_average_raw)
+for i in range(len(hopCountSum)):
+    hop_average_mean[i] = int(round((hopCountSum[i] + (NUM_LeaNode * MissPercent) * hop_average_raw[i]) / NUM_LeaNode))
+logger.info('hopAverage after replacing miss hop is: ' + str(hop_average_mean))
+
+# hop-count contrast
+hoplist_contrast_mean = copy.deepcopy(hoplist_raw)
+
+for i in range(len(hoplist_raw)):
+    for j in range(NUM_MeasureNode):
+        hoplist_contrast_mean[i][j] = round(math.fabs(hoplist_mean[i][j] - hop_average_mean[j]))
+logger.info('hoplist_contrast_mean is:\n%s\n' % str(hoplist_contrast_mean))
+print('4:param\n')
+
+train_data = np.array(hoplist_contrast_mean)
+dpgmm = mixture.GaussianMixture(n_components_gmm,
+                                        covariance_type='full').fit(train_data, miss_index_hop=miss_index_hop, hoplist_contrast_mean=hoplist_contrast_mean)
+logger.info('hoplist_contrast_mean after gmm.fit is:\n%s\n' % str(hoplist_contrast_mean))
+
+means = dpgmm.means_
+logger.info('dpgmm\'s means is: %s\n' % (means))
+print('dpgmm\'s means is: %s\n' % (means))
+
+# predict label
+predictResult = dpgmm.predict(train_data)
+predictResultList = predictResult.tolist()
+logger.info('result of predicting leafnode: \n' + str(predictResultList))
+
+# replacing miss hop with gmm.mean_
+hoplist_gmm = copy.deepcopy(hoplist_raw)
+
+for i in range(NUM_LeaNode):
+    for j in range(NUM_MeasureNode):
+        if hoplist_raw[i][j] == 10000:
+            hoplist_gmm[i][j] = round(hop_average_mean[j] + means[predictResultList[i]][j])
+logger.info('hopList recovering by gmm is:\n%s\n' % (str(hoplist_gmm)))
+print('5:predictResult\n')
+
+# shared path estimation
+likehood = predict.caculateLikehoodMap(hoplist_gmm, leafNodes, measureNodes, Epsilon)
+print('6:likehood\n')
+alphaMap = predict.getAlpha(likehood['map_measure'], sharedPath, path, measureNodes)
+print('7:alphaMap\n')
+
+estimation_predict, estimation_predict_percent, shared_path_predict = estimation.estimateByPredict(leafNodes, measureNodes[:1], likehood['map'], alphaMap, path, sharedPath)
+shared_path_predict['RMSE'] = estimation_predict
+logger.info('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
+logger.info('estimation with approach of predict\'s result is(percent): %s when Epsilon is %s.' % (str(1 - estimation_predict_percent), '1'))
+print('8:shared_path_predict\n')
+# print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
+print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(1 - estimation_predict_percent), '1'))
+
+network_gmm, label_ip_gmm = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leafNodes, measureNodes[:1])
+# nx.draw(network_gmm, node_size=30, labels=label_ip_gmm, font_size=10)
+# plt.axis('off')
+# plt.show()
+# plt.cla()
+
+# 度分布
+# degree_gmm = nx.degree_histogram(network_gmm)
+# x = []
+# for i in range(len(degree_gmm)):
+#     for j in range(degree_gmm[i]):
+#         x.append(i)
+# the histogram of the data
+# n, bins, patches = plt.hist(x, 5, normed=1, facecolor='green', alpha=0.5)
+# plt.show()
+# plt.cla()
+
+# 图的直径
+diameter_gmm = nx.diameter(network_gmm)
+print('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+logger.info('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+
+# 最大连通子图
+# ccs = [len(c) for c in sorted(nx.connected_components(network_gmm), key=len, reverse=True)]
+# print(ccs)
+# print('\n')
+# largest_cc = max(nx.connected_components(network_gmm), key=len)
+
+# node_color = ['green'] + ['red' for i in range(len(network_gmm.nodes()) - 1)]
+# for index in largest_cc:
+#     node_color[int(index)] = 'c'
+# nx.draw(network_gmm, node_size=30, node_color=node_color, labels=label_ip)
+
+# plt.axis('off')
+# plt.show()

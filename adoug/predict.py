@@ -63,7 +63,11 @@ def getAlpha(likehood_measure, sharedPath, path, measureNodes):
                     shared = sharedPath[pair0][pair1][measure]
                 except KeyError:
                     shared = sharedPath[pair1][pair0][measure]
-                sum_inter += shared / min(len(path[pair0][measure]), len(path[pair1][measure]))
+
+                if isinstance(path[pair0][measure], int):
+                    sum_inter += shared / min(path[pair0][measure], path[pair1][measure])
+                else:
+                    sum_inter += shared / min(len(path[pair0][measure]), len(path[pair1][measure]))
 
             alphaMap[C][measure] = sum_inter / len(pairlist)
 

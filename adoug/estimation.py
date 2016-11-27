@@ -50,15 +50,11 @@ def getSharedPath(method, level):
     return sharedPath
 
 
-def estimate(leafNodes, measureNodes, method, labelMap, nodeMap, level):
+def estimate(leafNodes, measureNodes, method, labelMap, nodeMap, shared_path):
     interSum = 0
     RMSE = 0
 
-    sharedPath_node = getSharedPath('node', level)
-
-    now = datetime.datetime.now()
-    nowFormat = now.strftime("%Y-%m-%d %H:%M:%S")
-    logger.info('****estimate shared path with level of %s start.%s****' % (level, nowFormat))
+    sharedPath_node = shared_path
 
     for i in range(len(leafNodes)):
         for j in range(i + 1, len(leafNodes)):
@@ -77,20 +73,16 @@ def estimate(leafNodes, measureNodes, method, labelMap, nodeMap, level):
                     realShared = sharedPath_node[source][dest][measure]
                     interSum += math.fabs((myShared - realShared) ** 2)
     RMSE = (interSum / (len(leafNodes) * (len(leafNodes) + 1) / 2 - 2)) ** 0.5
-    logger.info('%s-cluster\'s RMSE is: %s.\nThere are %s clusters.' % (level, str(RMSE), str(len(nodeMap))))
-
-    now = datetime.datetime.now()
-    nowFormat = now.strftime("%Y-%m-%d %H:%M:%S")
-    logger.info('****estimate shared path with level of %s end.%s****' % (level, nowFormat))
-
     return RMSE
 
 
-def estimateByPredict(leafNodes, measureNodes, likehood_map, alphaMap, path, level):
-    sharedPath_node = getSharedPath('node', level)
+def estimateByPredict(leafNodes, measureNodes, likehood_map, alphaMap, path, shared_path):
+    sharedPath_node = shared_path
     shared_path_predict = copy.deepcopy(sharedPath_node)
 
     interSum = 0
+    interSum_percent = 0
+    RMSE_percent = 0
 
     for i in range(len(leafNodes)):
         for j in range(i + 1, len(leafNodes)):
@@ -104,11 +96,16 @@ def estimateByPredict(leafNodes, measureNodes, likehood_map, alphaMap, path, lev
                     except KeyError:
                         likehood = likehood_map[dest][source][measure]
 
-                    myShared = alphaMap[likehood][measure] * min(len(path[source][measure]), len(path[dest][measure]))
+                    if isinstance(path[source][measure], int):
+                        myShared = alphaMap[likehood][measure] * min(path[source][measure], path[dest][measure])
+                    else:
+                        myShared = alphaMap[likehood][measure] * min(len(path[source][measure]), len(path[dest][measure]))
                     shared_path_predict[source][dest][measure] = myShared
                     realShared = sharedPath_node[source][dest][measure]
+                    # interSum += (myShared - realShared) ** 2
                     interSum += (myShared - realShared) ** 2
+                    interSum_percent += ((myShared - realShared) / max(myShared, realShared)) ** 2
     RMSE = (interSum / (len(leafNodes) * (len(leafNodes) + 1) / 2 * len(measureNodes))) ** 0.5
-    # RMSE = interSum ** 0.5
+    RMSE_percent = (interSum_percent / (len(leafNodes) * len(leafNodes) * 8)) ** 0.5
 
-    return RMSE, shared_path_predict
+    return RMSE, RMSE_percent, shared_path_predict
