@@ -87,6 +87,7 @@ node_serial_map = config_raw['node_serial_map']
 hop_dict = config_raw['hopDict']
 appear_count = config_raw['appearCount']
 appear_countlist = config_raw['appearCountList']
+print('nodelist: %d\n' % len(nodelist))
 
 node_serial_map_reverse = {}
 for (ip, number) in node_serial_map.items():
@@ -159,38 +160,56 @@ colordict = {
     'E': 'green'
 }
 
-network_raw, label_ip = ng.NetworkGenerator().generate(shared_path, hoplist, leaf_nodes, measure_nodes[:1])
+network_raw, label_figid_to_node = ng.NetworkGenerator().generate(shared_path, hoplist, leaf_nodes, measure_nodes[:1])
 print('nodes of real graph has: %s\n' % (len(network_raw.nodes())))
 print('edges of real graph has: %s\n' % (len(network_raw.edges())))
 
 logger.info('nodes of real graph has: %s\n' % (len(network_raw.nodes())))
 logger.info('edges of real graph has: %s\n' % (len(network_raw.edges())))
 
-nodelist_known = list(label_ip.keys())
-nodelist_all = network_raw.nodes()
+map_node_to_figid = {}
+for (figid, node) in label_figid_to_node.items():
+    map_node_to_figid[node] = figid
 
-colormap_known = [[193, 44, 161, 1]]
-colormap_all = [[193, 44, 161, 1]]
+figid_list_known = list(label_figid_to_node.keys())
 
-for node in nodelist_known:
-    ip_type = which_net_type(node_serial_map_reverse[label_ip[node]])
+figid_list_all = network_raw.nodes()
+
+map_figid_to_color = {}
+map_node_to_color = {}
+colormap_known = []
+colormap_all = []
+
+for figid in figid_list_known:
+    node = label_figid_to_node[figid]
+
+    ip_type = which_net_type(node_serial_map_reverse[node])
     colormap_known.append(colordict[ip_type])
+    map_node_to_color[node] = colordict[ip_type]
+colormap_known[0] = [193, 44, 161, 1]
 
-for node in nodelist_all:
-    if node not in label_ip:
+for figid in figid_list_all:
+    if figid not in label_figid_to_node:
         colormap_all.append('m')
+        map_figid_to_color[figid] = 'm'
     else:
-        ip_type = which_net_type(node_serial_map_reverse[label_ip[node]])
+        ip_type = which_net_type(node_serial_map_reverse[label_figid_to_node[figid]])
         colormap_all.append(colordict[ip_type])
+        map_figid_to_color[figid] = colordict[ip_type]
+map_figid_to_color[0] = [193, 44, 161, 1]
+colormap_all[0] = [193, 44, 161, 1]
 
 print('3: complete network_raw, colormap_known, colormap_all\n')
 
-# nx.draw(network_raw, nodelist=nodelist_known, node_size=30, node_color=colormap_known, labels=label_ip, font_size=10)
+# print('nodelist_known: %d\n' % len(nodelist_known))
+# print('colormap_known: %d\n' % len(colormap_known))
+# print('label_figid_to_node: %d\n' % len(label_figid_to_node))
+# nx.draw(network_raw, nodelist=nodelist_known, node_size=30, node_color=colormap_known, labels=label_figid_to_node)
 # plt.axis('off')
 # plt.show()
 # plt.cla()
 
-# nx.draw(network_raw, nodelist=nodelist_all, node_size=30, node_color=colormap_all, labels=label_ip, font_size=10)
+# nx.draw(network_raw, nodelist=nodelist_all, node_size=30, node_color=colormap_all, labels=label_figid_to_node, font_size=10)
 # plt.axis('off')
 # plt.show()
 # plt.cla()
@@ -200,7 +219,7 @@ print('3: complete network_raw, colormap_known, colormap_all\n')
 # nx.set_node_attributes(network_raw, 'pos', pos)
 # nx.write_gpickle(network_raw, "./topo/network_raw.gpickle")
 # print('4: save ./topo/network_raw.gpickle')
-# nx.draw(network_raw, nodelist=nodelist_know, edgelist=[], node_color=colormap_known, labels=label)
+# nx.draw(network_raw, nodelist=nodelist_known, edgelist=[], node_color=colormap_known, labels=label)
 # nx.draw(network_raw, nodelist=nodelist_all, node_size=30, node_color=colormap_all, labels=label, font_size=10)
 
 
@@ -209,13 +228,27 @@ nodeLevel = config.configNodeLevel()
 MissPercent = 0.3
 Epsilon = 1
 
-NUM_LeaNode = 500
-NUM_MeasureNode = 8
-n_components_gmm = 8
+NUM_LeaNode = 100
+NUM_MeasureNode = 3
+n_components_gmm = 3
 # 配置 end
 
 leafNodes = leaf_nodes[:NUM_LeaNode]
 measureNodes = measure_nodes[:NUM_MeasureNode]
+
+figid_list_known_raw = []
+colormap_known_raw = []
+for node in leafNodes:
+    figid = map_node_to_figid[node]
+    figid_list_known_raw.append(figid)
+    colormap_known_raw.append(map_figid_to_color[figid])
+figid_list_known_raw.insert(0, map_node_to_figid[measureNodes[0]])
+colormap_known_raw.insert(0, [193, 44, 161, 1])
+
+nx.draw(network_raw, nodelist=figid_list_known_raw, node_size=30, node_color=colormap_known_raw, labels=label_figid_to_node)
+plt.axis('off')
+plt.show()
+plt.cla()
 
 logger.info('leafNodes:\n' + str(leafNodes))
 logger.info('measureNodes:\n' + str(measureNodes))
@@ -311,11 +344,24 @@ print('8:shared_path_predict\n')
 # print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
 print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(1 - estimation_predict_percent), '1'))
 
-network_gmm, label_ip_gmm = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leafNodes, measureNodes[:1])
-# nx.draw(network_gmm, node_size=30, labels=label_ip_gmm, font_size=10)
-# plt.axis('off')
-# plt.show()
-# plt.cla()
+network_gmm, label_figid_to_node_gmm = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leafNodes, measureNodes[:1])
+
+map_node_to_figid_gmm = {}
+for (figid, node) in label_figid_to_node_gmm.items():
+    map_node_to_figid_gmm[node] = figid
+
+figid_list_known_gmm = list(label_figid_to_node_gmm.keys())
+colormap_known_gmm = []
+for figid in figid_list_known_gmm:
+    node = label_figid_to_node_gmm[figid]
+
+    colormap_known_gmm.append(map_node_to_color[node])
+colormap_known_gmm[0] = [193, 44, 161, 1]
+
+nx.draw(network_gmm, nodelist=figid_list_known_gmm, node_color=colormap_known_gmm, node_size=30, labels=label_figid_to_node_gmm, font_size=10)
+plt.axis('off')
+plt.show()
+plt.cla()
 
 # 度分布
 # degree_gmm = nx.degree_histogram(network_gmm)
@@ -342,7 +388,7 @@ logger.info('diameter_gmm is: %s\n' % (str(diameter_gmm)))
 # node_color = ['green'] + ['red' for i in range(len(network_gmm.nodes()) - 1)]
 # for index in largest_cc:
 #     node_color[int(index)] = 'c'
-# nx.draw(network_gmm, node_size=30, node_color=node_color, labels=label_ip)
+# nx.draw(network_gmm, node_size=30, node_color=node_color, labels=label_figid_to_node)
 
 # plt.axis('off')
 # plt.show()

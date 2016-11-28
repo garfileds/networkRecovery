@@ -106,6 +106,6 @@ def estimateByPredict(leafNodes, measureNodes, likehood_map, alphaMap, path, sha
                     interSum += (myShared - realShared) ** 2
                     interSum_percent += ((myShared - realShared) / max(myShared, realShared)) ** 2
     RMSE = (interSum / (len(leafNodes) * (len(leafNodes) + 1) / 2 * len(measureNodes))) ** 0.5
-    RMSE_percent = (interSum_percent / (len(leafNodes) * len(leafNodes) * 8)) ** 0.5
+    RMSE_percent = (interSum_percent / (len(leafNodes) * len(leafNodes) * len(measureNodes))) ** 0.5
 
     return RMSE, RMSE_percent, shared_path_predict

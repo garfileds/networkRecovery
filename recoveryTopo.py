@@ -64,8 +64,8 @@ for level in nodeLevel:
     logger.info('****Miss percent is: %s\n****' % (str(MissPercent)))
 
     NUM_LeaNode = nodeLevel[level]['numOfLeafnode']
-    NUM_MeasureNode = nodeLevel[level]['numOfMeasurenode']
-    # NUM_MeasureNode = 13
+    # NUM_MeasureNode = nodeLevel[level]['numOfMeasurenode']
+    NUM_MeasureNode = 1
     Epsilon = nodeLevel['param']['Epsilon']
 
     levelConfig = config.config()[level]
@@ -89,21 +89,21 @@ for level in nodeLevel:
             leaf.append(node)
     print('nodes of real graph has: %s\n' % (len(leaf)))
     print('edges of real graph has: %s\n' % (len(G.edges())))
-    nx.draw(G, node_size=30)
-    plt.axis('off')
-    plt.show()
-    plt.cla()
+    # nx.draw(G, node_size=30)
+    # plt.axis('off')
+    # plt.show()
+    # plt.cla()
     logger.info('nodes of real graph has: %s\n' % (len(leaf)))
     logger.info('edges of real graph has: %s\n' % (len(G.edges())))
 
     if level == '':
-        leafNodes = leaf[0:-NUM_MeasureNode]
-        measureNodes = leaf[-NUM_MeasureNode:len(leaf)]
+        leaf_nodes = leaf[0:-NUM_MeasureNode]
+        measure_nodes = leaf[-NUM_MeasureNode:len(leaf)]
     else:
-        leafNodes = config.config()[level]['leafnodes'][:NUM_LeaNode]
-        measureNodes = config.config()[level]['measurenodes'][:NUM_MeasureNode]
-    logger.info('leafNodes:\n' + str(leafNodes))
-    logger.info('measureNodes:\n' + str(measureNodes))
+        leaf_nodes = config.config()[level]['leaf_nodes'][:NUM_LeaNode]
+        measure_nodes = config.config()[level]['measure_nodes'][:NUM_MeasureNode]
+    logger.info('leaf_nodes:\n' + str(leaf_nodes))
+    logger.info('measure_nodes:\n' + str(measure_nodes))
     print('1:nodes add\n')
 
     # shortest distance as hop between nodes
@@ -116,34 +116,34 @@ for level in nodeLevel:
     #         path = json.load(f)
     if level == '2K_1000':
         path_extract = {}
-        for leaf in leafNodes:
+        for leaf in leaf_nodes:
             if leaf not in path_extract:
                 path_extract[leaf] = {}
-            for measure in measureNodes:
+            for measure in measure_nodes:
                 path_extract[leaf][measure] = nx.shortest_path(G, source=leaf, target=measure)
     path = path_extract
     print('2:path\n')
 
-    # caculate sharedPath between nodes
+    # caculate shared_path between nodes
     if level == '2K_1000':
-        sharedPath = fsp.byNode(path, leafNodes, measureNodes)
-        # with open(nodeLevel[level]['sharedPath'], 'w') as f:
-        #     json.dump(sharedPath, f)
+        shared_path = fsp.byNode(path, leaf_nodes, measure_nodes)
+        # with open(nodeLevel[level]['shared_path'], 'w') as f:
+        #     json.dump(shared_path, f)
     else:
-        with open(nodeLevel[level]['sharedPath'], 'r') as f:
-            sharedPath = json.load(f)
-    print('3:sharedPath\n')
+        with open(nodeLevel[level]['shared_path'], 'r') as f:
+            shared_path = json.load(f)
+    print('3:shared_path\n')
 
     if level == '2K_1000':
         hopSet = {}
         hopList = []
         hopCountSum = [0 for i in range(NUM_MeasureNode)]
 
-        for leafNode in leafNodes:
+        for leafNode in leaf_nodes:
             hopSet[leafNode] = []
             for i in range(NUM_MeasureNode):
-                hopSet[leafNode].append(len(path[leafNode][measureNodes[i]]) - 1)
-                hopCountSum[i] += len(path[leafNode][measureNodes[i]]) - 1
+                hopSet[leafNode].append(len(path[leafNode][measure_nodes[i]]) - 1)
+                hopCountSum[i] += len(path[leafNode][measure_nodes[i]]) - 1
             hopList.append(hopSet[leafNode])
 
         # random select hop missed
@@ -190,6 +190,7 @@ for level in nodeLevel:
 
     # Gaussian mixture model(GMM) for clutering leaf nodes
     n_components_gmm = nodeLevel[level]['n_components']
+    print('n_components_gmm is : %d\n' % n_components_gmm)
     if level == '2K_1000':
         train_data = np.array(hoplist_contrast_mean)
         dpgmm = mixture.GaussianMixture(n_components_gmm,
@@ -223,19 +224,19 @@ for level in nodeLevel:
     # estimation with predict using gmm-data: get alpha
     # hoplist_gmm = hoplist_mean
     if level == '2K_1000':
-        likehood = predict.caculateLikehoodMap(hoplist_gmm, leafNodes, measureNodes, Epsilon)
+        likehood = predict.caculateLikehoodMap(hoplist_gmm, leaf_nodes, measure_nodes, Epsilon)
         # with open(nodeLevel[level]['likehood'], 'w') as f:
         #     json.dump(likehood, f)
     else:
         with open(nodeLevel[level]['likehood'], 'r') as f:
             likehood = json.load(f)
     print('6:likehood\n')
-    alphaMap = predict.getAlpha(likehood['map_measure'], sharedPath, path, measureNodes)
+    alphaMap = predict.getAlpha(likehood['map_measure'], shared_path, path, measure_nodes)
     print('7:alphaMap\n')
 
     # estimation with predict using gmm-data: get alpha
     if level == '2K_1000':
-        estimation_predict, estimation_predict_percent, shared_path_predict = estimation.estimateByPredict(leafNodes, measureNodes[:1], likehood['map'], alphaMap, path, sharedPath)
+        estimation_predict, estimation_predict_percent, shared_path_predict = estimation.estimateByPredict(leaf_nodes, measure_nodes[:1], likehood['map'], alphaMap, path, shared_path)
         shared_path_predict['RMSE'] = estimation_predict
         # with open(nodeLevel[level]['shared_path_predict'], 'w') as f:
         #     json.dump(shared_path_predict, f)
@@ -244,39 +245,42 @@ for level in nodeLevel:
             shared_path_predict = json.load(f)
             estimation_predict = shared_path_predict['RMSE']
     logger.info('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
-    logger.info('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict_percent), '1'))
+    logger.info('estimation with approach of predict\'s result is(percent): %s when Epsilon is %s.' % (str(1 - estimation_predict_percent), '1'))
     print('8:shared_path_predict\n')
     print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
-    print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict_percent), '1'))
+    print('estimation with approach of predict\'s result is(percent): %s when Epsilon is %s.' % (str(1 - estimation_predict_percent), '1'))
 
-    network_gmm, label_ip = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leafNodes, measureNodes[:1])
+    # network_gmm, label_ip = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leaf_nodes, measure_nodes[:1])
+    # pos = nx.fruchterman_reingold_layout(network_gmm)
+    # nx.draw(network_gmm, pos=pos, node_size=30, labels=label_ip)
+    # plt.axis('off')
+    # plt.show()
 
     # 度分布
-    degree_gmm = nx.degree_histogram(network_gmm)
-    x = []
-    for i in range(len(degree_gmm)):
-        for j in range(degree_gmm[i]):
-            x.append(i)
-    # the histogram of the data
-    n, bins, patches = plt.hist(x, 5, normed=1, facecolor='green', alpha=0.5)
-    plt.show()
-    plt.cla()
+    # degree_gmm = nx.degree_histogram(network_gmm)
+    # x = []
+    # for i in range(len(degree_gmm)):
+    #     for j in range(degree_gmm[i]):
+    #         x.append(i)
+    # n, bins, patches = plt.hist(x, 5, normed=1, facecolor='green', alpha=0.5)
+    # plt.show()
+    # plt.cla()
 
     # 图的直径
-    diameter_gmm = nx.diameter(network_gmm)
-    print('diameter_gmm is: %s\n' % (str(diameter_gmm)))
-    logger.info('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+    # diameter_gmm = nx.diameter(network_gmm)
+    # print('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+    # logger.info('diameter_gmm is: %s\n' % (str(diameter_gmm)))
 
     # 最大连通子图
-    ccs = [len(c) for c in sorted(nx.connected_components(network_gmm), key=len, reverse=True)]
-    print(ccs)
-    print('\n')
-    largest_cc = max(nx.connected_components(network_gmm), key=len)
-
-    node_color = ['green'] + ['red' for i in range(len(network_gmm.nodes()) - 1)]
-    for index in largest_cc:
-        node_color[int(index)] = 'c'
-    nx.draw(network_gmm, node_size=30, node_color=node_color, labels=label_ip)
-
-    plt.axis('off')
-    plt.show()
+    # ccs = [len(c) for c in sorted(nx.connected_components(network_gmm), key=len, reverse=True)]
+    # print(ccs)
+    # print('\n')
+    # largest_cc = max(nx.connected_components(network_gmm), key=len)
+    #
+    # node_color = ['green'] + ['red' for i in range(len(network_gmm.nodes()) - 1)]
+    # for index in largest_cc:
+    #     node_color[int(index)] = 'c'
+    # nx.draw(network_gmm, node_size=30, node_color=node_color, labels=label_ip)
+    #
+    # plt.axis('off')
+    # plt.show()
