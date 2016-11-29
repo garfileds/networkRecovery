@@ -77,7 +77,7 @@ class NetworkGenerator():
                     if self.serial_number not in label and i == 0:
                         label[self.serial_number] = leafnodes[j]
 
-                    edges, path_temp = self.generate_edges_by_path(self.serial_number, i, hoplist[j][i] - shared_path_temp)
+                    edges, path_temp = self.generate_edges_by_path(self.serial_number, i, int(hoplist[j][i] - shared_path_temp))
                     G.add_edges_from(edges)
 
         return G, label

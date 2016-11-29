@@ -118,16 +118,13 @@ for j in range(len(measure_nodes)):
     dest = measure_nodes[j]
     for i in range(len(leaf_nodes)):
         source = leaf_nodes[i]
-        hop = 0
+        hop = 10000
         if dest in hop_dict and source in hop_dict[dest]:
             hop = hop_dict[dest][source]
         elif source in hop_dict and dest in hop_dict[source]:
             hop = hop_dict[source][dest]
-        elif hop == 0:
-            hop = 10000
-            count_miss_hop += 1
-        else:
-            hop = 10000
+
+        if hop == 10000:
             count_miss_hop += 1
 
         hoplist[i][j] = hop
@@ -152,7 +149,7 @@ for i in range(NUM_MeasureNode):
             hop_miss_count[i] += 1
 
 for i in range(len(hop_sum_list)):
-    hop_average_list = round(hop_sum_list[i] / (NUM_LeaNode - hop_miss_count))
+    hop_average_list[i] = round(hop_sum_list[i] / (NUM_LeaNode - hop_miss_count[i]))
 
 # replace miss hop with average of other hops
 hoplist_replace = hoplist[:len(hoplist)]
@@ -173,7 +170,7 @@ for i in range(len(hoplist_replace)):
         hop_sum_list_replace[j] += hoplist_replace[i][j]
 
 for i in range(NUM_MeasureNode):
-    hop_average_list_replace[i] = round(hop_sum_list_replace / NUM_LeaNode)
+    hop_average_list_replace[i] = round(hop_sum_list_replace[i] / NUM_LeaNode)
 
 # hop-count contrast
 hop_contrast = hoplist[:len(hoplist)]
@@ -202,17 +199,17 @@ hoplist_gmm = hoplist[:len(hoplist)]
 for index in hop_miss_index:
     leaf = index[0]
     measure = index[1]
-    hoplist_gmm[leaf][measure] = hop_average_list_replace + means[predict_result_list[leaf]][measure]
+    hoplist_gmm[leaf][measure] = hop_average_list_replace[measure] + means[predict_result_list[leaf]][measure]
 
-    path[leaf_nodes[leaf]][measure_nodes[measure]] = hoplist_gmm[leaf][measure]
+    path[leaf_nodes[leaf]][measure_nodes[measure]] = int(round(hoplist_gmm[leaf][measure]))
 
 logger.info('hopList recovering by gmm is:\n%s\n' % (str(hoplist_gmm)))
 print('5:predictResult\n')
 
 # shared path estimation
 likehood = predict.caculateLikehoodMap(hoplist_gmm, leaf_nodes, measure_nodes, Epsilon)
-logger.info('likehood: \n%S\n' % (str(likehood)))
-print('likehood: \n%S\n' % (str(likehood)))
+logger.info('likehood: \n%s\n' % (str(likehood)))
+print('likehood: \n%s\n' % (str(likehood)))
 print('6:likehood\n')
 
 # 假设某些共享路径已知
@@ -234,7 +231,7 @@ for k in range(len(measure_nodes)):
             likehood_map_kown[measure][likehood] = []
 
         for pair in pair_select:
-            likehood_map_kown.append(pair)
+            likehood_map_kown[measure][likehood].append(pair)
 
             source = pair[0]
             dest = pair[1]
@@ -252,7 +249,7 @@ for k in range(len(measure_nodes)):
 alpha_map_c_measure = predict.getAlpha(likehood_map_kown, shared_path_known, path, measure_nodes)
 print('7:alphaMap\n')
 
-shared_path_predict = shared_path_finder.RecoveryTopo().find_shared_path_based_on_hop(likehood_map_leaf_leaf, alpha_map_c_measure, leaf_nodes, measure_nodes)
+shared_path_predict = shared_path_finder.RecoveryTopo().find_shared_path_based_on_hop(likehood_map_leaf_leaf, alpha_map_c_measure, path, leaf_nodes, measure_nodes)
 
 network_gmm, label_figid_to_node_gmm = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leaf_nodes, measure_nodes[:1])
 
@@ -287,6 +284,11 @@ print('nodelist: %d\n' % len(figid_list_known_gmm))
 print('nodecolor: %d\n' % len(colormap_known_gmm))
 
 nx.draw(network_gmm, nodelist=figid_list_known_gmm, node_color=colormap_known_gmm, node_size=30, labels=label_figid_to_node_gmm, font_size=10)
+plt.axis('off')
+plt.show()
+plt.cla()
+
+nx.draw(network_gmm, node_size=30, labels=label_figid_to_node_gmm, font_size=10)
 plt.axis('off')
 plt.show()
 plt.cla()
