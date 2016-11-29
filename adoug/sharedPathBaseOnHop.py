@@ -3,9 +3,6 @@
 
 '''@file overview: find shared path based on hop with predict method'''
 
-import adoug.estimation as estimation
-import adoug.predict as predict
-
 
 class RecoveryTopo():
 
@@ -14,13 +11,26 @@ class RecoveryTopo():
     def __init__(self):
         self.network_raw = ''
 
-    def find_shared_path_based_on_hop(hoplist, shared_path_known, path, leaf_nodes, measure_nodes, Epsilon):
-        sharedPath = shared_path_known
+    def find_shared_path_based_on_hop(likehood_map_leaf_leaf, alpha_map_c_measure, path, leaf_nodes, measure_nodes):
+        shared_path_predict = {}
 
-        likehood = predict.caculateLikehoodMap(hoplist, leaf_nodes, measure_nodes, Epsilon)
-        alphaMap = predict.getAlpha(likehood['map_measure'], sharedPath, path, measure_nodes)
+        for i in range(len(leaf_nodes) - 1):
+            leaf1 = leaf_nodes[i]
 
-        estimation_predict, estimation_predict_percent, shared_path_predict = estimation.estimateByPredict(leaf_nodes, measure_nodes[:1], likehood['map'], alphaMap, path, sharedPath)
-        shared_path_predict['RMSE'] = estimation_predict
-        # print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
-        print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(1 - estimation_predict_percent), '1'))
+            for j in range(i + 1, len(leaf_nodes)):
+                leaf2 = leaf_nodes[j]
+
+                for k in range(len(measure_nodes)):
+                    measure = measure_nodes[k]
+
+                    if leaf1 not in shared_path_predict:
+                        shared_path_predict[leaf1] = {}
+                        shared_path_predict[leaf1][leaf2] = {}
+                    elif leaf2 not in shared_path_predict[leaf1]:
+                        shared_path_predict[leaf1][leaf2] = {}
+
+                    likehood = likehood_map_leaf_leaf[leaf1][leaf2]
+                    alpha = alpha_map_c_measure[likehood][measure]
+                    shared_path_predict[leaf1][leaf2][measure] = round(alpha * min(path[leaf1][measure], path[leaf2][measure]))
+
+        return shared_path_predict

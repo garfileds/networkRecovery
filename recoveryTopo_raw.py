@@ -186,7 +186,7 @@ for figid in figid_list_known:
     ip_type = which_net_type(node_serial_map_reverse[node])
     colormap_known.append(colordict[ip_type])
     map_node_to_color[node] = colordict[ip_type]
-colormap_known[0] = [193, 44, 161, 1]
+colormap_known[0] = '#a51391'
 
 for figid in figid_list_all:
     if figid not in label_figid_to_node:
@@ -196,8 +196,8 @@ for figid in figid_list_all:
         ip_type = which_net_type(node_serial_map_reverse[label_figid_to_node[figid]])
         colormap_all.append(colordict[ip_type])
         map_figid_to_color[figid] = colordict[ip_type]
-map_figid_to_color[0] = [193, 44, 161, 1]
-colormap_all[0] = [193, 44, 161, 1]
+map_figid_to_color[0] = '#a51391'
+colormap_all[0] = '#a51391'
 
 print('3: complete network_raw, colormap_known, colormap_all\n')
 
@@ -243,12 +243,12 @@ for node in leafNodes:
     figid_list_known_raw.append(figid)
     colormap_known_raw.append(map_figid_to_color[figid])
 figid_list_known_raw.insert(0, map_node_to_figid[measureNodes[0]])
-colormap_known_raw.insert(0, [193, 44, 161, 1])
+colormap_known_raw.insert(0, '#a51391')
 
-nx.draw(network_raw, nodelist=figid_list_known_raw, node_size=30, node_color=colormap_known_raw, labels=label_figid_to_node)
-plt.axis('off')
-plt.show()
-plt.cla()
+# nx.draw(network_raw, nodelist=figid_list_known_raw, node_size=30, node_color=colormap_known_raw, labels=label_figid_to_node)
+# plt.axis('off')
+# plt.show()
+# plt.cla()
 
 logger.info('leafNodes:\n' + str(leafNodes))
 logger.info('measureNodes:\n' + str(measureNodes))
@@ -356,7 +356,11 @@ for figid in figid_list_known_gmm:
     node = label_figid_to_node_gmm[figid]
 
     colormap_known_gmm.append(map_node_to_color[node])
-colormap_known_gmm[0] = [193, 44, 161, 1]
+colormap_known_gmm[0] = '#a51391'
+
+
+print('nodelist: %d\n' % len(figid_list_known_gmm))
+print('nodecolor: %d\n' % len(colormap_known_gmm))
 
 nx.draw(network_gmm, nodelist=figid_list_known_gmm, node_color=colormap_known_gmm, node_size=30, labels=label_figid_to_node_gmm, font_size=10)
 plt.axis('off')

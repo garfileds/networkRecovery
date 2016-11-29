@@ -65,7 +65,7 @@ for level in nodeLevel:
 
     NUM_LeaNode = nodeLevel[level]['numOfLeafnode']
     # NUM_MeasureNode = nodeLevel[level]['numOfMeasurenode']
-    NUM_MeasureNode = 1
+    NUM_MeasureNode = 15
     Epsilon = nodeLevel['param']['Epsilon']
 
     levelConfig = config.config()[level]
