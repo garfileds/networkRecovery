@@ -42,7 +42,7 @@ def getAlpha(likehood_measure, sharedPath, path, measureNodes):
         alphaMap[C] = {}
 
         for measure in measureNodes:
-            alphaMap[C][measure] = {}
+            alphaMap[C][measure] = 0
             sum_inter = 0
 
             if C in likehood_measure[measure]:
@@ -52,7 +52,6 @@ def getAlpha(likehood_measure, sharedPath, path, measureNodes):
             else:
                 continue
 
-            pairlist_selected = pairlist[:10]
             for pair in pairlist:
                 pair0 = pair[0]
                 pair1 = pair[1]
@@ -72,6 +71,7 @@ def getAlpha(likehood_measure, sharedPath, path, measureNodes):
                 else:
                     sum_inter += shared / min(len(path[pair0][measure]), len(path[pair1][measure]))
 
-            alphaMap[C][measure] = sum_inter / len(pairlist)
+            if len(pairlist) != 0:
+                alphaMap[C][measure] = sum_inter / len(pairlist)
 
     return alphaMap

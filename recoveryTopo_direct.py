@@ -71,12 +71,11 @@ def which_net_type(ip):
 
 
 # 配置
-nodeLevel = config.configNodeLevel()
 Epsilon = 1
 
-NUM_LeaNode = 100
-NUM_MeasureNode = 3
-n_components_gmm = 3
+NUM_LeaNode = 1000
+NUM_MeasureNode = 15
+n_components_gmm = 10
 # 配置 end
 
 now = datetime.datetime.now()
@@ -135,6 +134,7 @@ for j in range(len(measure_nodes)):
         elif dest not in path[source]:
             path[source][dest] = {}
         path[source][dest] = hop
+print('count_miss_hop is: %d\n' % count_miss_hop)
 print('init 1: complete measure_nodes, leaf_nodes, path, hoplist\n')
 
 hop_sum_list = [0 for i in range(NUM_MeasureNode)]
@@ -209,7 +209,6 @@ print('5:predictResult\n')
 # shared path estimation
 likehood = predict.caculateLikehoodMap(hoplist_gmm, leaf_nodes, measure_nodes, Epsilon)
 logger.info('likehood: \n%s\n' % (str(likehood)))
-print('likehood: \n%s\n' % (str(likehood)))
 print('6:likehood\n')
 
 # 假设某些共享路径已知
@@ -222,7 +221,12 @@ for k in range(len(measure_nodes)):
     measure = measure_nodes[k]
 
     for likehood in range(1, NUM_MeasureNode + 1):
-        pair_select = likehood_map_measure_c[measure][likehood][:2]
+        if likehood not in likehood_map_measure_c[measure]:
+            pair_select = []
+        elif len(likehood_map_measure_c[measure][likehood]) < 2:
+            pair_select = likehood_map_measure_c[measure][likehood][:1]
+        else:
+            pair_select = likehood_map_measure_c[measure][likehood][:2]
 
         if measure not in likehood_map_kown:
             likehood_map_kown[measure] = {}
@@ -280,14 +284,33 @@ for figid in figid_list_known_gmm:
     colormap_known_gmm.append(map_node_to_color[node])
 colormap_known_gmm[0] = '#a51391'
 
-print('nodelist: %d\n' % len(figid_list_known_gmm))
-print('nodecolor: %d\n' % len(colormap_known_gmm))
+print('nodes\' number: %d\n' % len(network_gmm.nodes()))
+print('edges\' number: %d\n' % len(network_gmm.edges()))
 
+# 度分布
+print('度分布\n')
+degree_gmm = nx.degree_histogram(network_gmm)
+logger.info('degree is:\n%s\n' % str(degree_gmm))
+x = []
+for i in range(len(degree_gmm)):
+    for j in range(degree_gmm[i]):
+        x.append(i)
+n, bins, patches = plt.hist(x, 5, normed=1, facecolor='green', alpha=0.5)
+plt.show()
+plt.cla()
+
+# 图的直径
+diameter_gmm = nx.diameter(network_gmm)
+print('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+logger.info('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+
+print('已知节点的拓扑图\n')
 nx.draw(network_gmm, nodelist=figid_list_known_gmm, node_color=colormap_known_gmm, node_size=30, labels=label_figid_to_node_gmm, font_size=10)
 plt.axis('off')
 plt.show()
 plt.cla()
 
+print('所有节点的拓扑图\n')
 nx.draw(network_gmm, node_size=30, labels=label_figid_to_node_gmm, font_size=10)
 plt.axis('off')
 plt.show()
