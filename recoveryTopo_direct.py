@@ -5,24 +5,18 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn import mixture
-import math
 import re
 import copy
-import json
 import random
 import datetime
 import logging
+import sys
 import logging.handlers as logHandler
 
 import adoug.network_generator as ng
-import adoug.config_raw as config_raw
-import adoug.mapColor as mc
-import adoug.config as config
-import adoug.findSharedPath as fsp
-import adoug.estimation as estimation
-import adoug.clustering as clu
 import adoug.predict as predict
 import adoug.sharedPathBaseOnHop as shared_path_finder
+import adoug.config_raw as config_raw
 
 LOG_FILE = './log/info_recovery.log'
 
@@ -37,17 +31,16 @@ logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
 
-def find_measure_nodes(num, data):
-    data_sort = sorted(data, reverse=True)
+def find_measure_nodes(map_node_to_count, node_serial_map):
     measure_nodes = []
 
-    for item in data_sort:
-        for index in range(100):
-            if item == data[index]:
-                measure_nodes.append(index)
+    for count in appear_count_sort[:100]:
+        for (node, num) in map_node_to_count.items():
+            if num == count:
+                measure_nodes.append(node_serial_map[node])
 
     logger.info("appear_count_sort_real is: \n%s\n" % (str(measure_nodes)))
-    return measure_nodes[:num]
+    return measure_nodes
 
 
 def which_net_type(ip):
@@ -73,14 +66,24 @@ def which_net_type(ip):
 # 配置
 Epsilon = 1
 
-NUM_LeaNode = 1000
-NUM_MeasureNode = 15
+# NUM_LeaNode = 1000
+# NUM_MeasureNode = 15
+NUM_LeaNode = sys.argv[1]
+NUM_MeasureNode = sys.argv[2]
 n_components_gmm = 10
 # 配置 end
 
 now = datetime.datetime.now()
 timeStyle = now.strftime("%Y-%m-%d %H:%M:%S")
 logger.info('****%s: recoveryTopo_direct.py start****\n' % (timeStyle))
+
+# data_process = networkFromCap.process('./package_wireshark/')
+# nodelist = data_process['nodelist']
+# nodelist_ip = data_process['nodelist_ip']
+# node_serial_map = data_process['node_serial_map']
+# hop_dict = data_process['hop_dict']
+# appear_count = data_process['appear_count']
+# appear_countlist = data_process['appear_countlist']
 
 config_raw = config_raw.config_raw()
 nodelist_ip = list(config_raw['node_serial_map'].keys())
@@ -89,16 +92,16 @@ node_serial_map = config_raw['node_serial_map']
 hop_dict = config_raw['hopDict']
 appear_count = config_raw['appearCount']
 appear_countlist = config_raw['appearCountList']
-print('nodelist: %d\n' % len(nodelist))
+print('pcap包统计得到节点数目为: %d\n' % len(nodelist))
 
 node_serial_map_reverse = {}
 for (ip, number) in node_serial_map.items():
     node_serial_map_reverse[number] = ip
 
-# appear_count_sort = sorted(appear_countlist, reverse=True)
-# logger.info('appear_count_sort is: \n%s\n' % str(appear_count_sort))
+appear_count_sort = sorted(appear_countlist, reverse=True)
 
-measure_nodes = config_raw['appearCountSortReal'][:NUM_MeasureNode]
+measure_nodes = find_measure_nodes(appear_count, node_serial_map)[:NUM_MeasureNode]
+print(str(measure_nodes) + '\n')
 
 # 假设相关变量
 leaf_nodes = copy.deepcopy(nodelist)
@@ -118,6 +121,7 @@ for j in range(len(measure_nodes)):
     for i in range(len(leaf_nodes)):
         source = leaf_nodes[i]
         hop = 10000
+
         if dest in hop_dict and source in hop_dict[dest]:
             hop = hop_dict[dest][source]
         elif source in hop_dict and dest in hop_dict[source]:
@@ -134,8 +138,9 @@ for j in range(len(measure_nodes)):
         elif dest not in path[source]:
             path[source][dest] = {}
         path[source][dest] = hop
-print('count_miss_hop is: %d\n' % count_miss_hop)
-print('init 1: complete measure_nodes, leaf_nodes, path, hoplist\n')
+print('缺失的跳数数目是: %d\n' % count_miss_hop)
+print('缺失比例为：%f\n' % float(count_miss_hop * 1.0 / (NUM_LeaNode * NUM_MeasureNode)))
+print('Step 1: 选取观测节点，叶子节点，计算得到跳数矩阵\n')
 
 hop_sum_list = [0 for i in range(NUM_MeasureNode)]
 hop_miss_count = [0 for i in range(NUM_MeasureNode)]
@@ -186,7 +191,8 @@ logger.info('hoplist_contrast_mean after gmm.fit is:\n%s\n' % str(hop_contrast))
 
 means = dpgmm.means_
 logger.info('dpgmm\'s means is: %s\n' % (means))
-print('dpgmm\'s means is: %s\n' % (means))
+print('Step 2: 跳数学习\n')
+print('高斯混合模型学习得到的均值参数: \n%s\n' % (means))
 
 # predict label
 predict_result = dpgmm.predict(train_data)
@@ -202,14 +208,16 @@ for index in hop_miss_index:
     hoplist_gmm[leaf][measure] = hop_average_list_replace[measure] + means[predict_result_list[leaf]][measure]
 
     path[leaf_nodes[leaf]][measure_nodes[measure]] = int(round(hoplist_gmm[leaf][measure]))
+    if path[leaf_nodes[leaf]][measure_nodes[measure]] == 0:
+        path[leaf_nodes[leaf]][measure_nodes[measure]] = 1
+        hoplist_gmm[leaf][measure] = 1
 
 logger.info('hopList recovering by gmm is:\n%s\n' % (str(hoplist_gmm)))
-print('5:predictResult\n')
 
 # shared path estimation
 likehood = predict.caculateLikehoodMap(hoplist_gmm, leaf_nodes, measure_nodes, Epsilon)
 logger.info('likehood: \n%s\n' % (str(likehood)))
-print('6:likehood\n')
+print('Step 3: 计算叶子节点对的相似率\n')
 
 # 假设某些共享路径已知
 shared_path_known = {}
@@ -251,7 +259,7 @@ for k in range(len(measure_nodes)):
             shared_path_known[source][dest][measure] = int(alpha * min(hoplist_gmm[map_leaf_to_i[source]][k], hoplist_gmm[map_leaf_to_i[dest]][k]))
 
 alpha_map_c_measure = predict.getAlpha(likehood_map_kown, shared_path_known, path, measure_nodes)
-print('7:alphaMap\n')
+print('Step 4: 计算参数alphaMap\n')
 
 shared_path_predict = shared_path_finder.RecoveryTopo().find_shared_path_based_on_hop(likehood_map_leaf_leaf, alpha_map_c_measure, path, leaf_nodes, measure_nodes)
 
@@ -284,25 +292,24 @@ for figid in figid_list_known_gmm:
     colormap_known_gmm.append(map_node_to_color[node])
 colormap_known_gmm[0] = '#a51391'
 
-print('nodes\' number: %d\n' % len(network_gmm.nodes()))
-print('edges\' number: %d\n' % len(network_gmm.edges()))
+print('网络拓扑推断得到的节点数: %d\n' % len(network_gmm.nodes()))
 
 # 度分布
-print('度分布\n')
-degree_gmm = nx.degree_histogram(network_gmm)
-logger.info('degree is:\n%s\n' % str(degree_gmm))
-x = []
-for i in range(len(degree_gmm)):
-    for j in range(degree_gmm[i]):
-        x.append(i)
-n, bins, patches = plt.hist(x, 5, normed=1, facecolor='green', alpha=0.5)
-plt.show()
-plt.cla()
+# print('度分布\n')
+# degree_gmm = nx.degree_histogram(network_gmm)
+# logger.info('degree is:\n%s\n' % str(degree_gmm))
+# x = []
+# for i in range(len(degree_gmm)):
+#     for j in range(degree_gmm[i]):
+#         x.append(i)
+# n, bins, patches = plt.hist(x, 5, normed=1, facecolor='green', alpha=0.5)
+# plt.show()
+# plt.cla()
 
 # 图的直径
-diameter_gmm = nx.diameter(network_gmm)
-print('diameter_gmm is: %s\n' % (str(diameter_gmm)))
-logger.info('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+# diameter_gmm = nx.diameter(network_gmm)
+# print('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+# logger.info('diameter_gmm is: %s\n' % (str(diameter_gmm)))
 
 print('已知节点的拓扑图\n')
 nx.draw(network_gmm, nodelist=figid_list_known_gmm, node_color=colormap_known_gmm, node_size=30, labels=label_figid_to_node_gmm, font_size=10)

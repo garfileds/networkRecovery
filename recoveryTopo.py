@@ -12,16 +12,16 @@ import logging.handlers as logHandler
 import datetime
 import json
 import random
+import sys
 
-import adoug.mapColor as mc
 import adoug.config as config
 import adoug.findSharedPath as fsp
 import adoug.estimation as estimation
-import adoug.clustering as clu
 import adoug.predict as predict
 import adoug.network_generator as ng
 
 nodeLevel = config.configNodeLevel()
+# MissPercent = float(sys.argv[3])
 MissPercent = 0.3
 
 # logging.basicConfig(level=logging.WARNING and logging.INFO,
@@ -66,7 +66,13 @@ for level in nodeLevel:
     NUM_LeaNode = nodeLevel[level]['numOfLeafnode']
     # NUM_MeasureNode = nodeLevel[level]['numOfMeasurenode']
     NUM_MeasureNode = 15
+    # NUM_LeaNode = int(sys.argv[1])
+    # NUM_MeasureNode = int(sys.argv[2])
     Epsilon = nodeLevel['param']['Epsilon']
+
+    print('跳数缺失率：%s\n' % str(MissPercent))
+    print('叶子节点数目：%s\n' % str(NUM_LeaNode))
+    print('观测节点数目：%s\n' % str(NUM_MeasureNode))
 
     levelConfig = config.config()[level]
 
@@ -87,12 +93,12 @@ for level in nodeLevel:
     for node in degree.keys():
         if degree[node] == 1:
             leaf.append(node)
-    print('nodes of real graph has: %s\n' % (len(leaf)))
-    print('edges of real graph has: %s\n' % (len(G.edges())))
-    # nx.draw(G, node_size=30)
-    # plt.axis('off')
-    # plt.show()
-    # plt.cla()
+    print('仿真网络的已知节点数目: %s\n' % (len(leaf)))
+    print('仿真网络的已知边数: %s\n' % (len(G.edges())))
+    nx.draw(G, node_size=30)
+    plt.axis('off')
+    plt.show()
+    plt.cla()
     logger.info('nodes of real graph has: %s\n' % (len(leaf)))
     logger.info('edges of real graph has: %s\n' % (len(G.edges())))
 
@@ -104,7 +110,7 @@ for level in nodeLevel:
         measure_nodes = config.config()[level]['measure_nodes'][:NUM_MeasureNode]
     logger.info('leaf_nodes:\n' + str(leaf_nodes))
     logger.info('measure_nodes:\n' + str(measure_nodes))
-    print('1:nodes add\n')
+    print('Step 1: 选择观测节点、叶子节点\n')
 
     # shortest distance as hop between nodes
     # if level == '2K_1000':
@@ -122,7 +128,7 @@ for level in nodeLevel:
             for measure in measure_nodes:
                 path_extract[leaf][measure] = nx.shortest_path(G, source=leaf, target=measure)
     path = path_extract
-    print('2:path\n')
+    print('Step 2:计算参数path\n')
 
     # caculate shared_path between nodes
     if level == '2K_1000':
@@ -132,7 +138,7 @@ for level in nodeLevel:
     else:
         with open(nodeLevel[level]['shared_path'], 'r') as f:
             shared_path = json.load(f)
-    print('3:shared_path\n')
+    print('Step 3:计算参数shared_path\n')
 
     if level == '2K_1000':
         hopSet = {}
@@ -186,7 +192,7 @@ for level in nodeLevel:
         hop_average_mean = levelConfig['hop_average_mean']
         hoplist_raw = levelConfig['hoplist_raw']
         hoplist_contrast_mean = levelConfig['hoplist_contrast_mean']
-    print('4:param\n')
+    print('Step 4:计算跳数矩阵和跳数差值矩阵\n')
 
     # Gaussian mixture model(GMM) for clutering leaf nodes
     n_components_gmm = nodeLevel[level]['n_components']
@@ -217,7 +223,7 @@ for level in nodeLevel:
     else:
         predictResultList = levelConfig['predict_result']
         hoplist_gmm = levelConfig['hoplist_gmm']
-    print('5:predictResult\n')
+    print('Step 5:计算参数predictResult\n')
 
     # shared path estimation
 
@@ -230,9 +236,9 @@ for level in nodeLevel:
     else:
         with open(nodeLevel[level]['likehood'], 'r') as f:
             likehood = json.load(f)
-    print('6:likehood\n')
+    print('Step 6:计算参数likehood\n')
     alphaMap = predict.getAlpha(likehood['map_measure'], shared_path, path, measure_nodes)
-    print('7:alphaMap\n')
+    print('Step 7:计算alphaMap\n')
 
     # estimation with predict using gmm-data: get alpha
     if level == '2K_1000':
@@ -246,15 +252,15 @@ for level in nodeLevel:
             estimation_predict = shared_path_predict['RMSE']
     logger.info('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
     logger.info('estimation with approach of predict\'s result is(percent): %s when Epsilon is %s.' % (str(1 - estimation_predict_percent), '1'))
-    print('8:shared_path_predict\n')
-    print('estimation with approach of predict\'s result is(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
-    print('estimation with approach of predict\'s result is(percent): %s when Epsilon is %s.' % (str(1 - estimation_predict_percent), '1'))
+    print('Step 8:计算参数shared_path_predict\n')
+    print('网络拓扑推断误差率(RMSE): %s when Epsilon is %s.' % (str(estimation_predict), '1'))
+    print('网络拓扑推断准确度: %s when Epsilon is %s.' % (str(1 - estimation_predict_percent), '1'))
 
-    # network_gmm, label_ip = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leaf_nodes, measure_nodes[:1])
-    # pos = nx.fruchterman_reingold_layout(network_gmm)
-    # nx.draw(network_gmm, pos=pos, node_size=30, labels=label_ip)
-    # plt.axis('off')
-    # plt.show()
+    network_gmm, label_ip = ng.NetworkGenerator().generate(shared_path_predict, hoplist_gmm, leaf_nodes, measure_nodes[:1])
+    pos = nx.fruchterman_reingold_layout(network_gmm)
+    nx.draw(network_gmm, pos=pos, node_size=30, labels=label_ip)
+    plt.axis('off')
+    plt.show()
 
     # 度分布
     # degree_gmm = nx.degree_histogram(network_gmm)
@@ -267,9 +273,9 @@ for level in nodeLevel:
     # plt.cla()
 
     # 图的直径
-    # diameter_gmm = nx.diameter(network_gmm)
-    # print('diameter_gmm is: %s\n' % (str(diameter_gmm)))
-    # logger.info('diameter_gmm is: %s\n' % (str(diameter_gmm)))
+    diameter_gmm = nx.diameter(network_gmm)
+    print('拓扑推断图的直径是: %s\n' % (str(diameter_gmm)))
+    logger.info('diameter_gmm is: %s\n' % (str(diameter_gmm)))
 
     # 最大连通子图
     # ccs = [len(c) for c in sorted(nx.connected_components(network_gmm), key=len, reverse=True)]
